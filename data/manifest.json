@@ -1,5 +1,5 @@
 {
-"version": 1794596795,
+"version": 1794600741,
 "sprites": {
 "arno": {
 "casual": "img/sprites/arno_casual.webp",
@@ -1279,6 +1279,7 @@
 "bg_hq_roof_snow_night",
 "bg_hq_yard",
 "bg_hq_yard_dawn",
+"bg_hq_yard_day",
 "bg_hq_yard_evening",
 "bg_hq_yard_night",
 "bg_hq_yard_rain",
@@ -1704,7 +1705,9 @@
 "cg_v23_kiss_b",
 "cg_v26_tarin"
 ],
-"bg": [],
+"bg": [
+"bg_hq_yard_day"
+],
 "bgm": [
 "bgm_guiding_calm",
 "bgm_market_day",
