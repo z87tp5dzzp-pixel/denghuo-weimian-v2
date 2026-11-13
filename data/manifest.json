@@ -1,5 +1,5 @@
 {
-"version": 1794600741,
+"version": 1794605070,
 "sprites": {
 "arno": {
 "casual": "img/sprites/arno_casual.webp",
@@ -1072,6 +1072,8 @@
 "cg_o26_other_side",
 "cg_o30_shadow",
 "cg_od1_dream_lamp",
+"cg_ov13_kiss_a",
+"cg_ov13_kiss_b",
 "cg_ox08_kiss_a",
 "cg_ox08_kiss_b",
 "cg_ox12_kiss_a",
@@ -1666,6 +1668,8 @@
 "cg_o26_other_side",
 "cg_o30_shadow",
 "cg_od1_dream_lamp",
+"cg_ov13_kiss_a",
+"cg_ov13_kiss_b",
 "cg_ox08_kiss_a",
 "cg_ox08_kiss_b",
 "cg_ox12_kiss_a",
