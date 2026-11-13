@@ -1,5 +1,5 @@
 {
-"version": 1794586376,
+"version": 1794588524,
 "sprites": {
 "arno": {
 "casual": "img/sprites/arno_casual.webp",
@@ -1023,6 +1023,11 @@
 "cg_k25_together",
 "cg_k27_grave",
 "cg_kd5_moon",
+"cg_kv08_laugh",
+"cg_kv18b_a",
+"cg_kv18b_b",
+"cg_kv_n2_a",
+"cg_kv_n2_b",
 "cg_kx10_kiss_a",
 "cg_kx10_kiss_b",
 "cg_kx12_snow",
@@ -1626,6 +1631,11 @@
 "cg_fate_red_other_side_rowan",
 "cg_fate_red_other_side_silas",
 "cg_fate_red_other_side_vex",
+"cg_kv08_laugh",
+"cg_kv18b_a",
+"cg_kv18b_b",
+"cg_kv_n2_a",
+"cg_kv_n2_b",
 "cg_l05_headset",
 "cg_l11_coat",
 "cg_l15_dawn",
