@@ -1,5 +1,5 @@
 {
-"version": 1794605070,
+"version": 1794607439,
 "sprites": {
 "arno": {
 "casual": "img/sprites/arno_casual.webp",
@@ -884,6 +884,8 @@
 "cg_ar25_kiss_b",
 "cg_ar27_kiss_a",
 "cg_ar27_kiss_b",
+"cg_av18_kiss_a",
+"cg_av18_kiss_b",
 "cg_ax09_bite_a",
 "cg_ax09_bite_b",
 "cg_ax16_run",
@@ -1534,6 +1536,8 @@
 "cg_ar25_kiss_b",
 "cg_ar27_kiss_a",
 "cg_ar27_kiss_b",
+"cg_av18_kiss_a",
+"cg_av18_kiss_b",
 "cg_ax09_bite_a",
 "cg_ax09_bite_b",
 "cg_ax16_run",

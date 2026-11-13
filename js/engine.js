@@ -49,7 +49,7 @@ const ACT_END_WEEK = [1, 1, 6, 11, 15, 17]; // index = 幕（1..5）
 const ACT_END_DAY = [7, 7, 42, 77, 105, 113];
 const actOfWeek = (w) => w <= 1 ? 1 : w <= 6 ? 2 : w <= 11 ? 3 : w <= 15 ? 4 : 5;
 // 重要劇情：必看。負荷條件不符時，用「她自己推感官／兩位嚮導緊急疏導」橋接
-const V2_KEY = ['K21', 'CV15', 'EV13', 'OV13', 'KV18', 'KV08', 'RV18', 'RV13', 'RV14', 'RV24', 'RV23', 'K16', 'K16x', 'K_trust_repair', 'K23', 'KV_N0', 'KV39', 'KV42', 'K11b', 'V14', 'V21', 'S22', 'A23', 'L21', 'S24', 'V23', 'R18', 'C23', 'E23', 'O22', 'N24', 'AR22', 'K20', 'S11', 'N21', 'V20', 'AR27', 'O10', 'L20', 'A22', 'R17', 'C22', 'E22', 'O21', 'N23', 'S23', 'V22'];
+const V2_KEY = ['K21', 'CV15', 'EV13', 'OV13', 'AV18', 'KV18', 'KV08', 'RV18', 'RV13', 'RV14', 'RV24', 'RV23', 'K16', 'K16x', 'K_trust_repair', 'K23', 'KV_N0', 'KV39', 'KV42', 'K11b', 'V14', 'V21', 'S22', 'A23', 'L21', 'S24', 'V23', 'R18', 'C23', 'E23', 'O22', 'N24', 'AR22', 'K20', 'S11', 'N21', 'V20', 'AR27', 'O10', 'L20', 'A22', 'R17', 'C22', 'E22', 'O21', 'N23', 'S23', 'V22'];
 // 框架場景：同一輪裡看過的句子不再出現（選項前那一句除外）
 const FRAME_ID = /^(GUIDE_DAILY|BRIEFING_RANDOM|SENT_(DOOR|STAY|ORDER)|PATROL|MX_SETTING|MX_AFTER|MX_CARRY|LOAD_(CHECK|70|90|100)|PLACE_[A-Z_]+|GX_(OPEN|MAIN|MA|MAB|URGENT|MISSED|PATROL|PILL|WAR|WAR_LATE|RAIN|SNOW|AGAIN|LOAD|PAIR)|GXF_[A-Z]+(_\d+)?|WATCH_(SHALLOW|MID|DEEP)|GR_[A-Z_0-9]+|GUIDE_STAGE_GENERIC|LAMP_RITUAL|NEGLECT_GENERIC|MB_[A-Z_]+|SLOT_[A-Z_]+|MX_SENSE(_[A-Z]+)?|CAMP_[A-Z_]+|SLOAD_[A-Z_]+|GFAT_[A-Z_]+|V2_[A-Z_]+|GRAVE_[A-Z_0-9]+|SNEAK_[A-Z_0-9]+|GUIDE_NONE|MXF_[A-Z_0-9]+)$/;
 const OVERNIGHT = ['outside_wall', 'outpost', 'sealed'];
