@@ -559,16 +559,16 @@ function quickAct(a) {
 }
 
 // ---------------- game menu (left navigation + content), Ren'Py game_menu ----------------
-const SCREENS = { today: '今日', history: '歷史紀錄', save: '存檔', load: '讀取', relation: '關係', endings: '結局圖鑑', cg: 'CG鑑賞', prefs: '設定', about: '關於', help: '說明' };
+const SCREENS = { today: '今日', diary: '日記', history: '歷史紀錄', save: '存檔', load: '讀取', relation: '關係', endings: '結局圖鑑', cg: 'CG鑑賞', prefs: '設定', about: '關於', help: '說明' };
 const GM = { screen: null, page: null,
   render() {
     const s = this.screen; $('#gm-title').textContent = SCREENS[s] || '';
-    const nav = T.inGame ? ['today', 'history', 'save', 'load', 'relation', 'endings', 'cg', 'prefs', 'about', 'title'] : ['start', 'load', 'endings', 'cg', 'prefs', 'about'];
+    const nav = T.inGame ? ['today', 'diary', 'history', 'save', 'load', 'relation', 'endings', 'cg', 'prefs', 'about', 'title'] : ['start', 'load', 'endings', 'cg', 'prefs', 'about'];
     if (!V.touch) nav.splice(nav.indexOf('about') + 1, 0, 'help');
     $('#gm-nav').innerHTML = nav.map(k => `<button data-n="${k}" class="${k === s ? 'sel' : ''}">${k === 'title' ? '標題畫面' : k === 'start' ? '開始遊戲' : SCREENS[k]}</button>`).join('');
     $('#gm-nav').querySelectorAll('button').forEach(b => b.onclick = (e) => { e.stopPropagation(); navAct(b.dataset.n); });
     const c = $('#gm-content'); c.scrollTop = 0;
-    ({ today: scrToday, history: scrHistory, save: () => scrFiles('save'), load: () => scrFiles('load'), relation: scrRelation, endings: scrEndings, cg: scrCG, prefs: scrPrefs, about: scrAbout, help: scrHelp })[s](c);
+    ({ today: scrToday, diary: scrDiary, history: scrHistory, save: () => scrFiles('save'), load: () => scrFiles('load'), relation: scrRelation, endings: scrEndings, cg: scrCG, prefs: scrPrefs, about: scrAbout, help: scrHelp })[s](c);
   } };
 function openGM(screen) {
   setMode('auto', false); setMode('skip', false); if (T.typing) finishTyping();
@@ -579,6 +579,11 @@ function navAct(k) {
   if (k === 'start') { closeGM(); newGame(); return; }
   if (k === 'title') { confirmBox('確定要回到標題畫面嗎？\n未保存的進度將會遺失。', () => { autosave(); savePersist(); toTitle(); }); return; }
   GM.screen = k; GM.render();
+}
+function scrDiary(c) {
+  const D = ((engine && engine.S.v.diary) || []).slice().reverse();
+  c.innerHTML = '<div class="hist diary-list">' + (D.length ? D.map(e => `<div class="h"><div class="hn">第 ${esc(String(e.d))} 天</div><div class="ht">${esc(hiddenSafe(e.t, engine.S))}</div></div>`).join('') : '<div class="empty">日記還是空白的。每晚點燈以後，會寫上幾句。</div>') + '</div>';
+  c.scrollTop = 0;
 }
 function scrHistory(c) {
   const L = (engine && engine.S.log) || [];
@@ -615,7 +620,7 @@ function scrFiles(mode) {
   });
 }
 // 新版：今日狀態（負荷帶、明天預估、任務板期限、誰在等她、誰累了）
-const MB_NAME = { patrol: '城牆巡邏', recon: '偵察', escort: '護送', outside_wall: '牆外・兩天一夜', dark_op: '暗線', execution: '處決', outpost: '前哨站・過夜', sealed: '封鎖區・過夜' };
+const MB_NAME = { plot: '主線', patrol: '城牆巡邏', recon: '偵察', escort: '護送', outside_wall: '牆外・兩天一夜', dark_op: '暗線', execution: '處決', outpost: '前哨站・過夜', sealed: '封鎖區・過夜' };
 const BAND_TXT = ['安靜', '吵', '吃緊', '透支'];
 function scrToday(c) {
   const S = engine && engine.S; if (!S) { c.innerHTML = ''; return; }
@@ -637,7 +642,7 @@ function scrToday(c) {
     if ((+v['gfat_' + id] || 0) >= 70) t.push('累壞了');
     if (v['seek_' + id]) t.push('在等我去找他');
     const gap = (v.day | 0) - (+v['last_seen_' + id] || 0); if (gap >= 8) t.push(`${gap} 天沒見了`);
-    if ((+v['jealousy_' + id] || 0) >= 12) t.push('好像在鬧彆扭');
+    if ((+v['jealousy_' + id] || 0) >= 6) t.push('好像在鬧彆扭');
     if (t.length) notes.push(`<div class="td-row"><span class="k">${esc(NAMES[id])}</span><span class="v">${t.join('・')}</span></div>`);
   }
   h += `<div class="td-sec"><h4>他們</h4>` + (notes.length ? notes.join('') : '<div class="td-note">今天，大家看起來都還好。</div>') + '</div>';

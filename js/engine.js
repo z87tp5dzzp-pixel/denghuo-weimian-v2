@@ -66,6 +66,63 @@ const MB_TXT = {
   outpost: ['北坡前哨站缺一夜的守備。爐子壞了，被子很薄。', '海邊的前哨站。一間屋子，兩張床，一個窗。守到天亮。', '前哨站的訊號斷了。去接上，然後在那裡過一夜確認。', '雪線上的前哨站。上去要半天，下來要明天。'],
   sealed: ['封鎖區第七街。裡面的時間好像停了。守一夜，記錄異常。', '封鎖區的醫院。有人在裡面敲牆。去看，天亮再出來。', '封鎖區的邊界在移動。釘新的界樁，過一夜看它會不會再動。']
 };
+// ===== 第 2 期：主線狀態、主線任務卡、節日、日記 =====
+// 主線走到哪（看過哪一場主線）→ 現在是哪一段
+const PLOT_PH = [['M1-01', 'a1'], ['M2-01', 'p2a'], ['M2-03', 'p2b'], ['M2-04', 'p2c'], ['M2-05', 'p2d'], ['M2-06', 'p2e'],
+  ['M3-01', 'p3a'], ['M3-03', 'p3b'], ['M3-04', 'p3c'], ['M3-05', 'p3d'], ['M3-06', 'p3e'], ['M3-07', 'p3f'], ['M3-08', 'p3g'],
+  ['M4-02', 'p4a'], ['M4-03', 'p4b'], ['M4-04', 'p4c'], ['M4-05', 'p4d'], ['M5-01', 'p5']];
+// 跟著主線長出來的任務單（base＝實際走哪一種任務流程）
+const PLOT_MB = {
+  p2a: [{ base: 'escort', txt: '新嚮導團第一次跟外勤：護送後勤嚮導去外環營區。讓新來的人看看牆外的風。' }],
+  p2b: [{ base: 'escort', txt: '替失控的那位同僚，把遺物送回他母親家。署方不派車。' }, { base: 'recon', txt: '他吃的藥從哪裡來？去他常去的那條街，問、聽、記下來。' }],
+  p2c: [{ base: 'recon', txt: '下水道那批貨的另一半還沒找到。再下去一次。不准點火。' }, { base: 'patrol', txt: '舊港碼頭夜裡有船靠岸，沒有登記。去堤上守一個下午。' }],
+  p2d: [{ base: 'escort', txt: '貧民區失控的哨兵留下兩個孩子。帶他們去登記處——他們不肯放開彼此的手。' }, { base: 'outpost', txt: '黑市的貨從北坡進來。北坡前哨站缺一夜的守備，順便看著那條路。' }],
+  p2e: [{ base: 'escort', txt: '研究部要一批負荷資料，指定 A-08 護送採樣員。資料是誰的，單子上沒寫。' }],
+  p3a: [{ base: 'patrol', txt: '城牆下有人在撿佈道時撒下來的傳單。去收走——收傳單，不收人。' }, { base: 'outside_wall', txt: '教團的補給線經過牆外第二營地。去那裡過一夜，看半夜誰在搬東西。' }],
+  p3b: [{ base: 'escort', txt: '圍剿那天活下來的信徒家屬，要送去外圍區安置。護送。' }, { base: 'recon', txt: '那條街上還有沒有人想「自願」？去聽。聽到了，不要先動手。' }],
+  p3c: [{ base: 'patrol', txt: '輪休期間城牆缺人。半天的班，不算出勤——馬可斯說的。' }],
+  p3d: [{ base: 'dark_op', txt: '慈善會的捐款名冊少了一頁。便衣去舊貴族的宅邸區，看是誰拿走的。' }],
+  p3e: [{ base: 'patrol', txt: '停電夜之後，還有三區的燈沒亮。護送修線班，一條街一條街點回來。' }, { base: 'recon', txt: '停電那晚走失的孩子還有兩個沒找到。去外圍區，挨家挨戶。' }],
+  p3f: [{ base: 'recon', txt: '研究部要裂隙邊緣的雪樣本。最近大家都在採樣——採雪，採血。' }],
+  p4a: [{ base: 'execution', txt: '隔離區名單上有一個名字。署方說：例行。' }],
+  p4b: [{ base: 'patrol', txt: '外環巡邏。附註：A-08 須有哨兵同行，全程不得離開視線。' }],
+  p4c: [{ base: 'recon', txt: '雨季的下水道漲水了。有人看見穿研究部外套的人在裡面。去查。' }, { base: 'outpost', txt: '海邊的前哨站，雨停之前沒有人下得來。去守——離開這座城兩天。' }],
+  p4d: [{ base: 'sealed', txt: '封鎖區的界樁又動了。這一次，是往城裡動。' }],
+  p5: [{ base: 'patrol', txt: '牆內防衛：東區食堂街那一段。每一條街都是前線。' }, { base: 'escort', txt: '流民在城門外排隊。護送第一批進來的人，到他們能睡的地方。' }]
+};
+// 節日與季節（都是休假日）
+const FEST = { 21: 'HARVEST', 35: 'SEA', 49: 'LONGNIGHT', 63: 'SNOW', 70: 'LANTERN' };
+// 每晚的日記（點燈之後）。每一句只寫一次；用完就少寫一句。
+const DY = {
+  main: ['今天發生的事太大了，寫不進這麼小的格子裡。只寫一行：我還在。', '我把今天寫了三次，撕了兩次。剩下的這一行是：我回來了。', '今天的事，我不想寫。可是不寫的話，明天我會假裝它沒有發生。', '筆停在紙上很久，墨水暈開成一個黑點。就讓它代替今天吧。', '今天以後，有些事不一樣了。我還不知道是哪些。'],
+  mission: ['出勤。走了很長的路，聽了很多心跳。回來的時候，數字是對的——出去幾個，回來幾個。', '今天的任務很普通。普通得讓我想把它記下來。普通的日子，是有人守著才有的。', '任務。風很大。我把一個陌生人的心跳聽了一整個下午，他不知道。', '出牆、回牆。城門闔上的聲音，我今天第一次覺得像「到家了」。……我是不是寫錯了。', '巡邏的時候，有個小孩隔著鐵網對我揮手。我沒有揮回去。我現在後悔了。', '今天走過的那條街，三年前死過很多人。今天，它有人在晾衣服。', '回報寫了兩頁。馬可斯說他看得出我是活著寫的。'],
+  hurt: ['受傷了。不痛，是我騙自己的。痛，才是真的。', '繃帶纏到手肘。寫字的時候，字歪了。歪的字也是我寫的。', '醫療室的天花板我已經很熟了。今天有人坐在床邊，一直沒走。', '他們說我差一點。差一點，是一個很近的距離。'],
+  push: ['今天我把感官全打開了。世界大到我裝不下，可是我聽見了要聽的東西。值得嗎。……值得的。大概。', '開了感官。耳朵裡的雪原現在還在下。', '我又一個人撐了。寫下來，是為了下一次記得：有人說過不准。', '今天，我又把自己當成刀了。刀不會痛。可是我會。'],
+  guided: ['疏導。{g}的光走進來的時候，我沒有先躲。', '今晚是{g}。雪原安靜下來之後，我聽見自己的呼吸，很慢，很普通。', '{g}握著我的手腕，很久。我以為我會想抽回來。我沒有。', '疏導結束，{g}說了一句「晚安」。我回了。這是第一次嗎？我想不起來。', '{g}今天走得很小心，像怕踩碎什麼。我想跟他說，我沒有那麼容易碎。……我沒說。', '疏導室的燈關掉以前，{g}看了我一眼。我不知道那一眼是什麼意思，可是我記住了。', '今天的雪原，{g}走到了很裡面。他回來的時候，眼睛是濕的。我不敢問他看見了什麼。', '{g}的手很暖。我把這件事寫下來，是因為我怕明天就忘了暖是什麼感覺。'],
+  grave: ['去了墓地。說了一些活人的事。他們應該會想聽。', '墓碑上的名字，我一個一個摸過去。手很冷，名字是溫的。', '我在墓地站到天黑。回來的路上，路燈一盞一盞亮起來，像有人在替我數。', '墓地的風很安靜。安靜到我差一點，就想留下來。'],
+  quiet: ['今天沒有什麼事。我在窗邊坐了很久，看雲。雲是灰的，可是它在動。', '一個人待著。吃了一顆蘋果，很酸。我把它吃完了。', '今天很安靜。安靜的日子，我反而睡不著。', '什麼都沒做的一天。以前我會覺得這是浪費。今天我覺得，這是休息。', '房間裡的燈油快用完了。明天要去領。……我是在計畫明天嗎。', '我把刀擦了一遍，又擦了一遍。刀已經很亮了。擦的是我自己。'],
+  fest: { HARVEST: '秋收市集。手裡塞滿了別人給的東西：一顆梨、一塊餅、一句「謝謝妳守著」。我不知道要把它們放在哪裡。', SEA: '今天去了海邊。水很冷，太陽很暖。我的腳踝上還有沙。我沒有馬上洗掉。', LONGNIGHT: '長夜。一年裡最黑的一天，整座城都點著燈。我第一次覺得，黑夜不是只有我一個人在怕。', SNOW: '雪季。有人往我的領子裡塞了雪。我追了他半個訓練場。我笑了嗎？大家說我笑了。', LANTERN: '燈節。我放了一盞燈到海上。燈上寫了什麼，連日記都不告訴。' },
+  lead: {
+    kael: ['{n}今天坐在我左邊。七年都是左邊。我今天才發現，我也一直留著那個位子。', '{n}今天說了很多話——以他的標準。七句。我數了。', '{n}的劍帶又磨損了。我想替他換一條，又怕他不習慣。', '{n}今天叫了我的名字，叫完就走了。我在原地站了很久。', '{n}的手今天碰到我的手背。他沒有道歉。以前他會道歉。', '七年了。{n}還在。我寫下這一行，是因為我怕有一天它不是真的。'],
+    rowan: ['{n}今天又塞了東西給我吃。我吃完了。他笑得像我打了勝仗。', '{n}的手套又燒了一個洞。他說沒關係。他每次都說沒關係。', '{n}今天哼了一首歌。我聽不出是什麼歌，可是我一直記得旋律。', '今天在食堂，{n}坐進我那一圈雪裡，好像那裡本來就是他的位子。', '{n}說，冬天的湯要煮久一點。我問為什麼。他說，因為會有人晚回來。', '{n}看我的時候，像在看火。我不知道我有什麼好看的。'],
+    cecil: ['{n}今天在報告上寫了我的名字，不是編號。我看到了。', '{n}的眼鏡鏈今天勾到了我的袖子。他說「失禮」，耳朵紅了。', '{n}把我的排程改了三次。最後一次，空出了一個下午。', '{n}說，評估報告要寫實話。我問他，那你寫了什麼。他沒有回答。', '{n}今天沒有看錶。我跟他說話的時候，他一次都沒有看。', '{n}的字很好看。我把他寫給我的便條留下來了。不知道為什麼。'],
+    elio: ['{n}今天又檢查了一次我的藥。他的手指在藥袋上停了很久。', '{n}說我瘦了。他把一顆糖放進我的口袋，說是處方。', '{n}笑起來的時候，眼角那顆痣會動一下。我今天才注意到。', '{n}值完夜班，在醫療室的椅子上睡著了。我替他蓋了一件外套。他不知道。', '{n}說，痛的時候要說痛。我今天說了一次。他說，很好，很勇敢。', '{n}的書裡夾著一片葉子。他說是淺灘撿的。我想看看淺灘。'],
+    orion: ['{n}今天說，他夢到了明天。我沒有問明天是什麼樣子。', '{n}在窗邊站著，好像一直都在那裡。我開始習慣了。這很危險。', '{n}哼了一首沒有歌詞的歌。我好像在哪裡聽過。', '{n}說，門有兩邊。我不知道他在說哪一扇門。', '{n}看我的時候，像在看很久以前的人。我不喜歡。……我不討厭。', '{n}今天碰了我的額頭。他的手很涼，像十年前的風。'],
+    ash: ['{n}今天在我的門口蹲了一下午。我開門的時候，他假裝路過。', '{n}的項圈燈今天一直是綠的。我數了，綠了三個小時。', '{n}聞了我的頭髮，說今天的味道比較不苦。', '{n}說他記得每一個人的味道。我問他我是什麼味道。他說：雪。', '{n}把一顆石頭放在我的窗台上。很圓。他說是河邊最圓的。', '{n}今天笑了，露出犬齒。我想多看一次。'],
+    leo: ['{n}今天挑戰我三次。輸了三次。第三次，他差一點贏。', '{n}的耳機今天沒有開。他說，因為在我旁邊很安靜。', '{n}吵了一整天。我發現，我沒有嫌他吵。', '{n}說他睡不著。我說我也是。我們各自在自己的屋頂上，醒到天亮。', '{n}今天叫我「前輩」叫了二十一次。我沒有數。……我數了。', '{n}的心跳很快，像小鳥。在我旁邊的時候，會慢一點。'],
+    silas: ['{n}今天替一個不認識的人點了蠟燭。他說，總要有人記得。', '{n}的手套是白的，今天沾了一點灰。他沒有馬上拍掉。', '{n}叫我的名字的時候，用的是「您」。我開始覺得那個字很暖。', '禮拜堂的燭火今天很穩。{n}說，是因為有人在。', '{n}說他不祈禱。他只是點燈。我們在這件事上，好像是同一種人。', '{n}今天什麼都沒說，只是陪我坐著。那樣就夠了。'],
+    noa: ['{n}今天又給我調了草莓牛奶。我喝完了。他笑得很得意。', '{n}說的話，一半是玩笑。今天，我分不出是哪一半。', '{n}擦杯子的時候，會偷看我。我假裝不知道。', '{n}今天沒有開玩笑。整整一個晚上。我有點不習慣。', '{n}說酒館打烊以後，才是他真正的時間。他讓我留下來了。', '{n}的手很巧，綁繃帶比醫療室的人還快。我沒問他在哪裡學的。'],
+    vex: ['{n}今天叫我「小刀」。我回他一句。他笑到差點從牆上掉下去。', '{n}的營地今天有一個孩子在學寫字。寫的是我的名字。', '{n}說，牆外的星星比較多。我抬頭看，真的。', '{n}把他的菸熄了，因為我咳了一聲。', '{n}說他扛著兩百個人。今天，我替他扛了一個下午。', '{n}的槍上刻了很多道刻痕。今天，他沒有再刻新的。'],
+    arno: ['{n}今天煮了湯。他說，以前也煮過。我想不起來，可是我喝得出來。', '{n}叫我的名字，跟別人都不一樣。像在叫一個很小的人。', '{n}的手很冷，跟我一樣。我們都在用對方暖手。', '{n}今天說了一件小時候的事。我不記得了。可是我哭了。', '{n}說，以後每年都要一起過冬天。以後。他說了以後。', '{n}在海堤上等我，等了一整個下午。他說他習慣等。我不想讓他再習慣了。']
+  },
+  close: {
+    hi: ['如果明天不用醒來，好像也可以。……燈還沒點完。先點完再說。', '夜很長。我數著自己的心跳，數到一半就不想數了。', '我想，我是在等一個可以停下來的理由。今天也沒有等到。', '雪原在叫我。叫得很溫柔。我把燈調亮了一點。', '我把刀放在枕頭邊。不是怕有人來。是怕我自己。', '今天也活下來了。我不知道這句話，應該寫成好消息還是壞消息。', '如果我先走了，這本日記會留給誰呢。……誰都不要看。', '窗外的燈一盞一盞熄掉。我是最後一盞。', '我想睡很久很久。久到醒來的時候，什麼都不用撐了。', '今天有人說「明天見」。我回了「嗯」。我說謊了嗎？'],
+    mid: ['有時候想停下來。有時候，又想看看明天會不會比較好。今天是後面那種。', '燈點好了。今晚不黑。', '我把明天的事寫在紙條上，貼在門後面。我在計畫明天。這件事，我想記下來。', '睡前想到一個人的臉。我沒有寫是誰。', '今天沒有很想死。我把這一句寫得很小，怕被誰看見。', '心跳很普通，呼吸很普通。普通，原來可以是一種好消息。', '我好像有一點點，捨不得什麼了。', '今天的雪原有風，可是不冷。', '晚安。……這兩個字，我以前不寫的。', '有人在等我明天出現。我想讓他等到。'],
+    lo: ['明天，想早一點起來。去食堂喝第一鍋的湯。', '我想看看明天的天空是什麼顏色。我是說真的。', '今天想活。明天也想。我第一次把這兩句連在一起寫。', '燈點了兩盞。一盞給今天的人，一盞給我自己。', '我把刀擦好，放回架上，不放在枕頭邊了。', '如果有明天——不，明天一定會有。我在等它。', '晚安。明天見。我寫給誰呢？寫給明天的我。', '有人教會我一件事：把自己也算進去。今天，我算了。', '我今天笑了兩次。一次被看見，一次沒有。', '睡前，我第一次想到一年以後。']
+  },
+  over: ['字寫不直。耳朵裡的雪太大了。', '今天很吵。我只寫一行，怕寫多了，手會抖。', '負荷很高。燈的火在我眼裡分成三個。我不知道哪一個是真的。', '雪原在響。日記先寫到這裡。']
+};
+
 const SLOT_PROMPT = {
   day: [
     ['今天的白天空著。要做什麼？', '簡報結束，走廊上的人散開了。我呢？', '白天還很長。我想把它花在哪裡？'],
@@ -142,6 +199,8 @@ class Engine {
     if (n === 'week' && this._weekCtx != null) return this._weekCtx;
     switch (n) {
       case 'load_band': { const L = X.num(v.load); return L >= 90 ? 3 : L >= 70 ? 2 : L >= 40 ? 1 : 0; }
+      case 'plot': return this.plotNow().k;
+      case 'plot_age': { const p = this.plotNow(); return p.d === null ? 99 : X.num(v.day) - p.d; }
       case 'band_name': { const L = X.num(v.load); return BAND_NAME[L >= 90 ? 3 : L >= 70 ? 2 : L >= 40 ? 1 : 0]; }
       case 'guides_able': return this.guidesAble().length;
       case 'camp_tonight': return X.num(v.camp_day) === X.num(v.day) && X.num(v.day) > 0;
@@ -672,8 +731,10 @@ class Engine {
     else code.push(['cmd', 'slot', 'day', 0]);
     code.push(['call', 'LOAD_CHECK']);
     if (guides && !off) code.push(['cmd', 'slot', 'eve', 0]);
+    if (off && FEST[d] && this.D.scenes['FEST_' + FEST[d]] && !v['seen_FEST_' + FEST[d]] && !rest) code.push(['call', 'FEST_' + FEST[d]]);
     code.push(['cmd', 'slot', isDayOff(d + 1) ? 'night_eve' : 'night', 0]);
     code.push(['call', 'LOAD_CHECK']);
+    code.push(['cmd', 'msg_pick', '', 0]);
     code.push(['call', 'LAMP_RITUAL']);
     return code;
   }
@@ -794,6 +855,10 @@ class Engine {
     }
     S.queue.push({ t: 'main', id });
     return this.schedule();
+  }
+  nextMainIdx() { // 下一個還沒演的主線（不含 _ 分歧）位置
+    const O = this.D.order; for (let i = this.S.cursor + 1; i < O.length; i++) { const c = O[i]; if (this.getVar('seen_' + c) || /_/.test(c)) continue; return i; }
+    return O.length;
   }
   isFallbackFor(c) { const base = c.split('_')[0]; return this.S.lastMain && this.S.lastMain.split('_')[0] === base; }
   startMain(id) {
@@ -1048,7 +1113,62 @@ class Engine {
     return GUIDES.filter(x => (x === 'noa' ? !!v.guide_noa_unlocked : x === 'arno' ? !!v.arno_met : !!v[x + '_met']) && X.num(v['gfat_' + x]) < 70);
   }
   mbText(c) {
+    if (c.t === 'plot') { const L = PLOT_MB[c.ph] || []; return (L[c.i] || {}).txt || '……'; }
     const T = MB_TXT[c.t] || ['……']; return T[c.k % T.length];
+  }
+  // 第 2 期：主線走到哪一段（最後一場看過的主線）
+  plotNow() {
+    const v = this.S.v; let k = '', id = '';
+    for (const [m, ph] of PLOT_PH) if (v['seen_' + m.replace(/-/g, '_')]) { k = ph; id = m; }
+    const sc = id && this.D.scenes[id]; let d = sc && sc.date && typeof sc.date.day === 'number' ? sc.date.day : null;
+    if (d === null && id) d = X.num(v['plot_d_' + k]) || null;
+    return { k, d };
+  }
+  // 第 2 期：沒見面的夜裡，通訊器的訊息（全域兩天一則、同一人五天一則、每人最多九則）
+  msgPick() {
+    const v = this.S.v; const d = X.num(v.day);
+    if (X.num(v.camp_night) === d || X.num(v.msg_day) >= d - 1 || X.num(v.act) < 2) return;
+    if (X.num(v.tn_day) === d || X.num(v.ma_day) === d) return;
+    let best = '', bs = -1;
+    for (const x of LEADS) {
+      if (!this.met(x) || X.num(v['aff_' + x]) < 25 || X.num(v['last_seen_' + x]) >= d) continue;
+      if (x === 'kael' && v.kael_romance_lock) continue;
+      if (v['msg_day_' + x] !== undefined && d - X.num(v['msg_day_' + x]) < 5) continue;
+      if (X.num(v['msg_n_' + x]) >= 9 || !this.D.scenes['MSG_' + x.toUpperCase()]) continue;
+      const sc = X.num(v['aff_' + x]) + 3 * Math.min(10, d - X.num(v['last_seen_' + x])) + Math.random() * 10;
+      if (sc > bs) { bs = sc; best = x; }
+    }
+    if (!best) return;
+    v.msg_day = d; v['msg_day_' + best] = d; v['msg_n_' + best] = X.num(v['msg_n_' + best]) + 1; v.msg_who = best;
+    const a = X.num(v['aff_' + best]); v.msg_band = a >= 70 ? 2 : a >= 45 ? 1 : 0;
+    this.push('MSG_' + best.toUpperCase());
+  }
+  // 第 2 期：每晚自動寫的日記（每一句只寫一次）
+  dyTake(key, arr) {
+    const v = this.S.v; const k = 'dy_' + key; const used = Array.isArray(v[k]) ? v[k] : [];
+    const free = []; for (let i = 0; i < arr.length; i++) if (!used.includes(i)) free.push(i);
+    if (!free.length) return '';
+    const i = free[Math.floor(Math.random() * free.length)]; v[k] = used.concat([i]); return arr[i];
+  }
+  diaryCompose() {
+    const v = this.S.v; const d = X.num(v.day); if (d < 1) return '';
+    const parts = []; const L = X.num(v.load); const dw = X.num(v.deathwish);
+    if (L >= 90) { const t = this.dyTake('over', DY.over); return t ? t : ''; }
+    const p = this.plotNow();
+    if (FEST[d] && v['seen_FEST_' + FEST[d]] && !v['dyf_' + FEST[d]]) { v['dyf_' + FEST[d]] = true; parts.push(DY.fest[FEST[d]]); }
+    else if (p.d === d && p.k) parts.push(this.dyTake('main', DY.main));
+    else if (X.num(v.mission_day) === d && v.mx_hurt) parts.push(this.dyTake('hurt', DY.hurt));
+    else if (X.num(v.mission_day) === d && X.num(v.mx_pushed) >= 2) parts.push(this.dyTake('push', DY.push));
+    else if (X.num(v.mission_day) === d) parts.push(this.dyTake('mission', DY.mission));
+    else if (X.num(v.guided_day) === d && v.g1) parts.push(this.dyTake('guided', DY.guided).replace(/\{g\}/g, this.callFn('hname', [v.g1])));
+    else if (X.num(v.grave_day) === d) parts.push(this.dyTake('grave', DY.grave));
+    else parts.push(this.dyTake('quiet', DY.quiet));
+    const seen = LEADS.filter(x => this.met(x) && X.num(v['last_seen_' + x]) === d && DY.lead[x] && !(x === 'kael' && v.kael_romance_lock && d > 7))
+      .sort((a, b) => X.num(v['aff_' + b]) - X.num(v['aff_' + a]));
+    for (const x of seen) { const t = this.dyTake('l_' + x, DY.lead[x]); if (t) { parts.push(t.replace(/\{n\}/g, this.callFn('hname', [x]))); break; } }
+    parts.push(this.dyTake('c_' + (dw >= 55 ? 'hi' : dw >= 30 ? 'mid' : 'lo'), DY.close[dw >= 55 ? 'hi' : dw >= 30 ? 'mid' : 'lo']));
+    const txt = parts.filter(Boolean).join('');
+    return txt ? `Day ${d}。` + txt : '';
   }
   mbRefill() {
     const v = this.S.v; const d = X.num(v.day); const act = Math.max(2, X.num(v.act) || 1);
@@ -1056,6 +1176,13 @@ class Engine {
     const mb = (v.mb || []).filter(c => { if (c.dl < d) { v.mb_lapsed = c.t; v.mb_lapsed_day = d; v.mb_lapse_n = X.num(v.mb_lapse_n) + 1; return false; } return true; });
     const pool = (MB_TYPES_BY_ACT[Math.min(5, act)] || MB_TYPES_BY_ACT[2]).filter(t => !mb.some(c => c.t === t) && (t !== 'execution' || !!v.seen_S04) && (t !== 'dark_op' || this.met('vex') || this.met('silas')));
     const want = act >= 4 ? 3 : 2;
+    // 第 2 期：主線長出來的單子（一次一張；過期就被別人接走了）
+    const ph = this.plotNow().k; const PL = PLOT_MB[ph] || [];
+    if (!mb.some(c => c.t === 'plot')) for (let i = 0; i < PL.length; i++) {
+      if (v['mbp_' + ph + '_' + i]) continue;
+      if (PL[i].base === 'execution' && !v.seen_S04) { v['mbp_' + ph + '_' + i] = 'skip'; continue; }
+      v['mbp_' + ph + '_' + i] = 'issued'; mb.unshift({ t: 'plot', ph, i, base: PL[i].base, d0: d, dl: d + 3 + Math.floor(Math.random() * 2), k: 0 }); break;
+    }
     while (mb.length < want && pool.length) {
       const t = pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
       const k = X.num(v['mbk_' + t]); v['mbk_' + t] = k + 1;
@@ -1112,6 +1239,24 @@ class Engine {
     // 3) 男人的負荷：她選擇把這個時段花在他身上
     for (const x of SENTINELS) if (this.met(x) && v['sl_noticed_' + x] && X.num(v['sload_' + x]) >= 60) add(`去看看${this.callFn('hname', [x])}（他的心跳不對）`, [['set', 'sl_who', '=', '"' + x + '"'], ['call', 'SLOAD_CARE']], { lead: x, care: true });
     for (const g of GUIDES) if (this.met(g) && X.num(v['gfat_' + g]) >= 70 && v['gf_noticed_' + g]) add(`去看看${this.callFn('hname', [g])}（他累壞了）`, [['set', 'gf_who', '=', '"' + g + '"'], ['call', 'GFAT_CARE']], { lead: g, care: true });
+    // 第 2 期：吃醋——他在鬧彆扭（一次一位；同一人五天內不再出現）
+    { const jx = LEADS.filter(x => this.met(x) && X.num(v['jealousy_' + x]) >= 6 && X.num(v['aff_' + x]) >= 30 && !(x === 'kael' && v.kael_romance_lock) && d - X.num(v['jl_day_' + x]) >= 5 && X.num(v['jl_n_' + x]) < 6 && this.D.scenes['JEAL_VISIT'])
+        .sort((a, b) => X.num(v['jealousy_' + b]) - X.num(v['jealousy_' + a]))[0];
+      if (jx) add(`去找${this.callFn('hname', [jx])}（他好像在鬧彆扭）`, [['set', 'jl_who', '=', '"' + jx + '"'], ['call', 'JEAL_VISIT']], { lead: jx, care: true }); }
+    // 第 2 期：兩個男人起了衝突，她出面（白天／傍晚；六天一次；同一組最多兩次）
+    if (!night || kind === 'eve') {
+      if (X.num(v.act) >= 2 && d - X.num(v.md_day) >= 6 && this.D.scenes['MEDIATE']) {
+        const ml = LEADS.filter(x => this.met(x) && X.num(v['aff_' + x]) >= 30 && d - X.num(v['last_seen_' + x]) <= 7 && !(x === 'kael' && v.kael_romance_lock) && x !== 'arno');
+        let pair = null;
+        for (let i = 0; i < ml.length && !pair; i++) for (let j = i + 1; j < ml.length; j++) {
+          const k = pairKey(ml[i], ml[j]);
+          if (v['consent_' + k] || X.num(v['pbeat_' + k]) >= 2 || X.num(v['pair_bond_' + k]) >= 14 || X.num(v['md_n_' + k]) >= 2) continue;
+          if (X.num(v['md_last_' + k]) && d - X.num(v['md_last_' + k]) < 14) continue;
+          pair = [ml[i], ml[j]]; break;
+        }
+        if (pair) add(`（走廊那頭吵起來了——${this.callFn('hname', [pair[0]])}和${this.callFn('hname', [pair[1]])}）`, [['set', 'md_a', '=', '"' + pair[0] + '"'], ['set', 'md_b', '=', '"' + pair[1] + '"'], ['call', 'MEDIATE']], { mediate: true });
+      }
+    }
     // 4) 每位男主的下一段（故事佇列：一人一張；過期的優先、標示「在等我」）
     const lastSeen = (x) => x ? X.num(v['last_seen_' + x]) : 1e9;
     const wk0 = (e) => (e.s.slotd && e.s.slotd.w0 !== undefined) ? e.s.slotd.w0 : 0;
@@ -1356,6 +1501,8 @@ class Engine {
     this.markSeen(f.s);
     if (t in this.mainIndex) {
       if (this.getVar('seen_' + t) && this.mainIndex[t] <= S.cursor) { S.stack.pop(); this.afterScene(f.s, S.stack.length === 0); return; }
+      // v2：個人事件（例如休假日事件）提早被排到時，不可以跳過還沒演的主線——結束事件，主線照順序走。
+      if (this.mainIndex[t] > this.nextMainIdx() || this.getVar('seen_' + t)) { S.stack.pop(); this.afterScene(f.s, S.stack.length === 0); return; }
       S.stack.length = 0;
       S.cursor = this.mainIndex[t]; S.lastMain = t;
       this.push(t);
@@ -1480,7 +1627,8 @@ class Engine {
         break;
       }
       case 'diary': {
-        const text = this.interpText(a.trim());
+        const text = a.trim() === 'auto' ? this.diaryCompose() : this.interpText(a.trim());
+        if (!text) break;
         v.diary = (v.diary || []).concat([{ d: v.day, t: text }]).slice(-200);
         this.lastSnap = this.snapshot();
         S.log.push({ n: '日記', t: text, k: 'diary' });
@@ -1524,7 +1672,13 @@ class Engine {
       }
       case 'slot': this.slot(a.trim()); break;
       case 'slot_again': if (v.mb_cancel) { v.mb_cancel = false; this.slot(a.trim()); } break;
-      case 'mb_take': { const t = this.interpId(a.trim()); v.mb = (v.mb || []).filter(c => c.t !== t); v.mb_type = t; v.mb_taken = X.num(v.mb_taken) + 1; break; }
+      case 'mb_take': {
+        const t = this.interpId(a.trim()); const card = (v.mb || []).find(c => c.t === t);
+        v.mb = (v.mb || []).filter(c => c.t !== t); v.mb_type = t; v.mb_taken = X.num(v.mb_taken) + 1; v.mx_plot = '';
+        if (t === 'plot' && card) { v.mb_type = card.base; v.mx_plot = card.ph + '_' + card.i; v['mbp_' + card.ph + '_' + card.i] = 'taken'; }
+        break;
+      }
+      case 'msg_pick': this.msgPick(); break;
       case 'sload': { const [x, n] = a.trim().split(/\s+/); const id = this.interpId(x); if (SENTINELS.includes(id)) v['sload_' + id] = Math.max(0, Math.min(100, X.num(v['sload_' + id]) + X.num(this.ev(n)))); break; }
       case 'gfat': { const [x, n] = a.trim().split(/\s+/); const id = this.interpId(x); if (GUIDES.includes(id)) v['gfat_' + id] = Math.max(0, Math.min(100, X.num(v['gfat_' + id]) + X.num(this.ev(n)))); break; }
       case 'dayrest': { const sid = this.synth([...this.dayCode(v.day, true), ['end']]); this.push(sid); break; }
