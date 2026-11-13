@@ -1,5 +1,5 @@
 {
-"version": 1794594028,
+"version": 1794596795,
 "sprites": {
 "arno": {
 "casual": "img/sprites/arno_casual.webp",
@@ -1705,7 +1705,12 @@
 "cg_v26_tarin"
 ],
 "bg": [],
-"bgm": [],
+"bgm": [
+"bgm_guiding_calm",
+"bgm_market_day",
+"bgm_morning_soft",
+"bgm_sickbed"
+],
 "amb": [
 "amb_bar_low",
 "amb_chapel_quiet",
