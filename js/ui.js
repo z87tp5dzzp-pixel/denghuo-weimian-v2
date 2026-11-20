@@ -9,6 +9,7 @@ const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&
 const HIDDEN_ZH = { silas: '塞拉斯', noa: '諾亞', vex: '維克斯', arno: '亞諾' };
 const HIDDEN_UNLOCK = { silas: 'silas_unlocked', noa: 'noa_unlocked', vex: 'vex_unlocked', arno: 'arno_truth' };
 let DATA = null, MAN = null, engine = null, persist = null, endingTitles = {}, allEndings = [];
+let REPLAY = [], REPLAY_IDX = {}, END_SCENE = {}, END_CG = {};
 const settings = Object.assign({ bgm: 0.35, amb: 0.3, speed: 32, auto: 1, skipUnread: false, skipAfter: false, trans: true, mute: false }, jget('settings') || {});
 function jget(k) { try { return JSON.parse(localStorage.getItem(LS + k)); } catch (e) { return null; } }
 function jset(k, v) { try { localStorage.setItem(LS + k, JSON.stringify(v)); return true; } catch (e) { return false; } }
@@ -295,11 +296,12 @@ function onTap(e) {
 let RB = [];
 function rbPush(ch) { if (!engine || !engine.lastSnap) return; RB.push({ snap: engine.lastSnap, ch }); if (RB.length > 150) RB.splice(0, RB.length - 150); syncQuick(); }
 function rollback() {
+  if (T.replay) return;
   if (!T.inGame || RB.length < 2) return;
   RB.pop(); const t = RB.pop(); startGame(t.snap, { keepRB: true });
 }
 function prevChoice() {
-  if (!T.inGame) return;
+  if (!T.inGame || T.replay) return;
   let j = -1; for (let i = RB.length - 2; i >= 0; i--) if (RB[i].ch) { j = i; break; }
   if (j < 0) { notify('沒有可以返回的選項了。'); return; }
   const t = RB[j]; RB.length = j; startGame(t.snap, { keepRB: true });
@@ -405,9 +407,15 @@ function card(t1, t2, cls, ms) {
 // ---------------- persistence ----------------
 function loadPersist() {
   const p = jget('persist') || {};
-  persist = { endings: p.endings || {}, cgs: p.cgs || {}, unlocks: p.unlocks || {}, gallery: p.gallery || {}, read: new Set(p.read || []), chosen: p.chosen || {} };
+  persist = { endings: p.endings || {}, cgs: p.cgs || {}, unlocks: p.unlocks || {}, gallery: p.gallery || {}, read: new Set(p.read || []), chosen: p.chosen || {}, scenes: p.scenes || {}, met: p.met || {}, colors: p.colors || [] };
 }
-function savePersist() { jset('persist', { endings: persist.endings, cgs: persist.cgs, unlocks: persist.unlocks, gallery: persist.gallery, read: [...persist.read], chosen: persist.chosen }); }
+function savePersist() { if (T.replay) return; syncEver(); jset('persist', { endings: persist.endings, cgs: persist.cgs, unlocks: persist.unlocks, gallery: persist.gallery, read: [...persist.read], chosen: persist.chosen, scenes: persist.scenes, met: persist.met, colors: persist.colors }); }
+// 跨周目紀錄：見過的男主（隱藏男主在圖鑑裡維持？？？直到見過）、看過的顏色（回想時用）
+function syncEver() {
+  if (!engine || !engine.S || T.replay) return; const v = engine.S.v;
+  for (const id of LEADS) if (leadVisible(id, v)) persist.met[id] = persist.met[id] || Date.now();
+  for (const c of (v.colors_seen || [])) if (!persist.colors.includes(c)) persist.colors.push(c);
+}
 
 // ---------------- save system (pages A / Q / 1–9, like Ren'Py file_slots) ----------------
 function prune(s) {
@@ -430,10 +438,11 @@ function saveTo(key) { const s = curSnap(); if (!s) return false; return Store.s
 function rotate(prefix, n) { for (let i = n - 1; i >= 1; i--) { const r = Store.get(prefix + i); if (r) Store.set(prefix + (i + 1), r); } }
 let lastAuto = null;
 function autosave() {
+  if (T.replay) return;
   if (!engine || !T.inGame || !engine.lastSnap || engine.lastSnap === lastAuto) return;
   lastAuto = engine.lastSnap; rotate('auto-', 6); saveTo('auto-1');
 }
-function quickSave() { if (!T.inGame) return; rotate('quick-', perPage()); if (saveTo('quick-1')) notify('已快速存檔。'); syncQuick(); }
+function quickSave() { if (!T.inGame || T.replay) return; rotate('quick-', perPage()); if (saveTo('quick-1')) notify('已快速存檔。'); syncQuick(); }
 function quickLoad() { const r = Store.get('quick-1'); if (!r) return; confirmBox('讀取存檔會失去未保存的進度。\n確定要這樣做嗎？', () => loadRecord(r)); }
 function loadRecord(r) { savePersist(); closeGM(); startGame(r.snap); }
 function migrateOld() {
@@ -469,15 +478,21 @@ function startGame(snap, opt) {
   clearTimeout(T.timer); clearInterval(T.iv); T.resolve = null; T.card = null; T.choosing = false; setMode('auto', false); setMode('skip', false);
   if (!opt.keepRB) RB = [];
   $('#choices').classList.add('hidden'); $('#card').classList.add('hidden'); $('#pick').classList.add('hidden');
-  engine = new Engine(DATA, ui, persist);
+  T.replay = opt.replay || null;
+  const sandbox = T.replay ? { endings: Object.assign({}, persist.endings), cgs: Object.assign({}, persist.cgs), unlocks: JSON.parse(JSON.stringify(persist.unlocks)), gallery: Object.assign({}, persist.gallery), read: new Set(persist.read), chosen: {} } : null;
+  engine = new Engine(DATA, ui, sandbox || persist);
+  if (!T.replay) { const e0 = engine, m0 = e0.markSeen.bind(e0); e0.markSeen = (sid) => { m0(sid); if (REPLAY_IDX[sid] && !persist.scenes[sid]) persist.scenes[sid] = Date.now(); }; }
   if (snap) engine.load(snap); else engine.S = engine.newState();
+  if (T.replay) setupReplay(engine, T.replay);
   engine.lastSnap = engine.snapshot(); lastAuto = null;
   resetRender(); $('#mainmenu').classList.add('hidden'); closeGM();
   $('#window').classList.add('hidden'); $('#hud').classList.remove('hidden');
   T.inGame = true; buildQuick(); renderAll(engine.S);
+  if (T.replay) $('#hud').classList.add('hidden'); // 回想不顯示負荷條
   const my = ++runId; const e = engine;
   e.run().then(async (res) => {
     if (my !== runId || e.stopped) return;
+    if (T.replay) { endReplay(); return; }
     T.inGame = false; savePersist();
     if (res === 'ending' || res === 'end') {
       $('#window').classList.add('hidden'); $('#quick').classList.add('hidden');
@@ -488,7 +503,7 @@ function startGame(snap, opt) {
   }).catch(err => { console.error(err); notify('發生錯誤：' + err.message, 5000); });
 }
 function toTitle() {
-  if (engine) engine.stopped = true; runId++; T.inGame = false; T.resolve = null; T.card = null; RB = [];
+  if (engine) engine.stopped = true; runId++; T.inGame = false; T.replay = null; T.resolve = null; T.card = null; RB = [];
   clearTimeout(T.timer); clearInterval(T.iv); setMode('auto', false); setMode('skip', false);
   Snd.play('amb', null); Snd.play('bgm', MAN.bgm.bgm_title_dreams || MAN.bgm.bgm_theme_musicbox || Object.values(MAN.bgm)[0] || null, .8); R.bgm = '__title'; R.amb = null;
   $('#window').classList.add('hidden'); $('#quick').classList.add('hidden'); $('#choices').classList.add('hidden'); $('#hud').classList.add('hidden'); $('#card').classList.add('hidden');
@@ -529,8 +544,9 @@ async function pickPrologue(p) {
 // ---------------- quick menu ----------------
 const QM_TOUCH = [['rollback', '回退'], ['prev', '上個選項'], ['skip', '快進'], ['auto', '自動'], ['qsave', '快速存'], ['qload', '快速讀'], ['menu', '選單']];
 const QM_PC = [['rollback', '回退'], ['prev', '上個選項'], ['history', '歷史'], ['skip', '快進'], ['auto', '自動'], ['relation', '關係'], ['save', '存檔'], ['qsave', '快速存'], ['qload', '快速讀'], ['prefs', '設定']];
+const QM_REPLAY = [['history', '歷史'], ['skip', '快進'], ['auto', '自動'], ['endreplay', '結束回想']];
 function buildQuick() {
-  const q = $('#quick'); const set = V.touch ? QM_TOUCH : QM_PC;
+  const q = $('#quick'); const set = T.replay ? QM_REPLAY : V.touch ? QM_TOUCH : QM_PC;
   q.innerHTML = set.map(([a, l]) => `<button data-q="${a}">${l}</button>`).join('');
   q.querySelectorAll('button').forEach(b => b.onclick = (e) => { e.stopPropagation(); Snd.unlock(); quickAct(b.dataset.q); });
   q.classList.toggle('hidden', !T.inGame || !$('#gmenu').classList.contains('hidden'));
@@ -554,29 +570,32 @@ function quickAct(a) {
     case 'qsave': quickSave(); break;
     case 'qload': quickLoad(); break;
     case 'menu': openGM('save'); break;
+    case 'endreplay': endReplay(); break;
     default: openGM(a);
   }
 }
 
 // ---------------- game menu (left navigation + content), Ren'Py game_menu ----------------
-const SCREENS = { today: '今日', diary: '日記', history: '歷史紀錄', save: '存檔', load: '讀取', relation: '關係', endings: '結局圖鑑', cg: 'CG鑑賞', prefs: '設定', about: '關於', help: '說明' };
+const SCREENS = { today: '今日', diary: '日記', history: '歷史紀錄', save: '存檔', load: '讀取', relation: '關係', endings: '結局圖鑑', cg: 'CG鑑賞', replay: '回想', prefs: '設定', about: '關於', help: '說明' };
 const GM = { screen: null, page: null,
   render() {
     const s = this.screen; $('#gm-title').textContent = SCREENS[s] || '';
-    const nav = T.inGame ? ['today', 'diary', 'history', 'save', 'load', 'relation', 'endings', 'cg', 'prefs', 'about', 'title'] : ['start', 'load', 'endings', 'cg', 'prefs', 'about'];
+    const nav = T.replay ? ['history', 'prefs', 'endreplay'] : T.inGame ? ['today', 'diary', 'history', 'save', 'load', 'relation', 'endings', 'cg', 'prefs', 'about', 'title'] : ['start', 'load', 'endings', 'cg', 'replay', 'prefs', 'about'];
     if (!V.touch) nav.splice(nav.indexOf('about') + 1, 0, 'help');
-    $('#gm-nav').innerHTML = nav.map(k => `<button data-n="${k}" class="${k === s ? 'sel' : ''}">${k === 'title' ? '標題畫面' : k === 'start' ? '開始遊戲' : SCREENS[k]}</button>`).join('');
+    $('#gm-nav').innerHTML = nav.map(k => `<button data-n="${k}" class="${k === s ? 'sel' : ''}">${k === 'title' ? '標題畫面' : k === 'start' ? '開始遊戲' : k === 'endreplay' ? '結束回想' : SCREENS[k]}</button>`).join('');
     $('#gm-nav').querySelectorAll('button').forEach(b => b.onclick = (e) => { e.stopPropagation(); navAct(b.dataset.n); });
     const c = $('#gm-content'); c.scrollTop = 0;
-    ({ today: scrToday, diary: scrDiary, history: scrHistory, save: () => scrFiles('save'), load: () => scrFiles('load'), relation: scrRelation, endings: scrEndings, cg: scrCG, prefs: scrPrefs, about: scrAbout, help: scrHelp })[s](c);
+    ({ today: scrToday, diary: scrDiary, history: scrHistory, save: () => scrFiles('save'), load: () => scrFiles('load'), relation: scrRelation, endings: scrEndings, cg: scrCG, replay: scrReplay, prefs: scrPrefs, about: scrAbout, help: scrHelp })[s](c);
   } };
 function openGM(screen) {
+  if (T.replay && !['history', 'prefs'].includes(screen)) screen = 'history';
   setMode('auto', false); setMode('skip', false); if (T.typing) finishTyping();
   GM.screen = screen; $('#gmenu').classList.remove('hidden'); $('#quick').classList.add('hidden'); GM.render();
 }
 function closeGM() { $('#gmenu').classList.add('hidden'); $('#viewer').classList.add('hidden'); if (T.inGame) $('#quick').classList.remove('hidden'); syncQuick(); }
 function navAct(k) {
   if (k === 'start') { closeGM(); newGame(); return; }
+  if (k === 'endreplay') { endReplay(); return; }
   if (k === 'title') { confirmBox('確定要回到標題畫面嗎？\n未保存的進度將會遺失。', () => { autosave(); savePersist(); toTitle(); }); return; }
   GM.screen = k; GM.render();
 }
@@ -671,24 +690,146 @@ function scrRelation(c) {
   c.innerHTML = h;
   c.querySelectorAll('.rel-tabs button[data-l]').forEach(b => b.onclick = (e) => { e.stopPropagation(); GM.lead = b.dataset.l; scrRelation(c); });
 }
+// ---------------- 圖鑑：結局／CG／回想（第 7 期） ----------------
+// 跨周目：隱藏男主沒見過以前，名字一律？？？；沒解鎖的格子用剪影或？？？。
+const LEAD_ORDER = ['kael', 'rowan', 'cecil', 'elio', 'orion', 'ash', 'leo', 'silas', 'noa', 'vex', 'arno'];
+function leadKnown(id) { return !HIDDEN.includes(id) || !!(persist.met && persist.met[id]); }
+function everS() { const v = {}; for (const h of HIDDEN) if (leadKnown(h)) v[h + '_met'] = true; return { v }; }
+function leadLabel(id) { return id === 'common' ? '共通' : id === 'end' ? '結局' : leadKnown(id) ? NAMES[id] : '？？？'; }
+function sceneLead(sid, sc) {
+  if (sc.lead && LEADS.includes(sc.lead)) return sc.lead;
+  const m = /^routes\/([a-z]+)/.exec(sc.file || ''); if (m && LEADS.includes(m[1])) return m[1];
+  return 'common';
+}
+function buildCatalog() {
+  REPLAY = []; REPLAY_IDX = {}; END_SCENE = {}; END_CG = {}; const CG_LEAD = {};
+  for (const [sid, sc] of Object.entries(DATA.scenes)) {
+    let end = null; const cgs = [];
+    for (const ins of sc.code) if (ins[0] === 'cmd') {
+      if (ins[1] === 'ending') { const id = (ins[2] || '').trim(); if (id && !id.includes('{')) end = end || id; }
+      else if (ins[1] === 'cg') { const id = (ins[2] || '').trim().split(/\s+/)[0]; if (id && id !== 'off' && !id.includes('{') && !cgs.includes(id)) cgs.push(id); }
+    }
+    if (end) { END_SCENE[end] = END_SCENE[end] || sid; if (cgs.length && !END_CG[end]) END_CG[end] = cgs[0]; for (const c of cgs) CG_LEAD[c] = CG_LEAD[c] || 'end'; continue; }
+    if (!cgs.length || sid.startsWith('__')) continue;
+    const lead = sceneLead(sid, sc);
+    for (const c of cgs) CG_LEAD[c] = CG_LEAD[c] || lead;
+    const r = { sid, title: sc.title || sid, lead, cgs, file: sc.file || '', line: sc.line || 0 };
+    REPLAY.push(r); REPLAY_IDX[sid] = r;
+  }
+  REPLAY.sort((a, b) => a.file < b.file ? -1 : a.file > b.file ? 1 : a.line - b.line);
+  MAN.cg_lead = CG_LEAD;
+}
+function endingGroup(id) {
+  const m = /^([a-z]+)_/.exec(id);
+  if (/^three_/.test(id)) return 'three';
+  if (/^(multi|harem|quad)/.test(id)) return 'multi';
+  if (/^fate_/.test(id) || /_white_terminus/.test(id)) return 'fate';
+  if (m && LEADS.includes(m[1])) return m[1];
+  return 'other';
+}
+function endingLeads(id) { return id.split('_').filter(x => LEADS.includes(x)); }
+const END_GROUPS = [['lead', '個人結局'], ['three', '三人結局'], ['multi', '多人結局'], ['fate', '命運'], ['other', '其他結局']];
+function endCard(id) {
+  const ok = !!persist.endings[id]; const lk = endingLeads(id);
+  const unknown = lk.some(x => !leadKnown(x));
+  if (!ok) {
+    const cg = END_CG[id] && MAN.cg[END_CG[id]];
+    const sil = cg && !unknown ? ` style="background-image:url('${cg}')"` : '';
+    return `<div class="ecard lock"><div class="eth${sil ? ' sil' : ''}"${sil}></div><div class="et">？？？</div></div>`;
+  }
+  const cg = END_CG[id] && MAN.cg[END_CG[id]];
+  const t = hiddenSafe(endingTitles[id] || id, everS()); const d = new Date(persist.endings[id]);
+  return `<button class="ecard" data-end="${esc(id)}"><div class="eth"${cg ? ` style="background-image:url('${cg}')"` : ''}>${cg ? '' : '✦'}</div><div class="et">${esc(t)}</div><div class="ed">${isNaN(d) ? '' : `${d.getMonth() + 1}/${d.getDate()}`}</div></button>`;
+}
 function scrEndings(c) {
   const seen = allEndings.filter(e => persist.endings[e]).length;
-  c.innerHTML = `<div class="endl"><div class="cnt">已達成　${seen} / ${allEndings.length}</div>` + allEndings.map(e => persist.endings[e] ? `<div class="e">${esc(endingTitles[e] || e)}</div>` : '<div class="e lock">？？？</div>').join('') + '</div>';
+  const tab = GM.etab || 'lead'; GM.etab = tab;
+  const groups = {}; for (const e of allEndings) { const g = endingGroup(e); (groups[g] = groups[g] || []).push(e); }
+  const inTab = (g) => tab === 'lead' ? LEADS.includes(g) : g === tab;
+  let h = `<div class="endl"><div class="cnt">已達成　${seen} / ${allEndings.length}</div></div><div class="gtabs">` +
+    END_GROUPS.map(([k, l]) => { const ids = Object.keys(groups).filter(g => k === 'lead' ? LEADS.includes(g) : g === k).flatMap(g => groups[g]); const n = ids.filter(e => persist.endings[e]).length; return `<button data-t="${k}" class="${k === tab ? 'sel' : ''}">${l}<small>${n}/${ids.length}</small></button>`; }).join('') + '</div>';
+  if (tab === 'lead') {
+    for (const L of LEAD_ORDER) { const ids = groups[L]; if (!ids) continue;
+      h += `<div class="gsec"><h4>${esc(leadLabel(L))}<small>${ids.filter(e => persist.endings[e]).length}/${ids.length}</small></h4><div class="egrid">${ids.map(endCard).join('')}</div></div>`; }
+  } else {
+    const ids = Object.keys(groups).filter(inTab).flatMap(g => groups[g]);
+    h += `<div class="egrid">${ids.map(endCard).join('') || '<div class="empty">沒有項目。</div>'}</div>`;
+  }
+  h += '<div class="rel-note">看過的結局可以點開，再看一次。</div>';
+  c.innerHTML = h;
+  c.querySelectorAll('.gtabs button').forEach(b => b.onclick = (e) => { e.stopPropagation(); GM.etab = b.dataset.t; scrEndings(c); c.scrollTop = 0; });
+  c.querySelectorAll('.ecard[data-end]').forEach(b => b.onclick = (e) => {
+    e.stopPropagation(); const id = b.dataset.end; const sid = END_SCENE[id]; if (!sid) return;
+    if (T.inGame) { notify('回想只能從標題畫面開啟。'); return; }
+    confirmBox(`要回想「${hiddenSafe(endingTitles[id] || id, everS())}」嗎？`, () => startReplay({ sid, lead: endingLeads(id)[0] || '', back: 'endings', ending: true }));
+  });
 }
 function cgNote(c) { return typeof persist.cgs[c] === 'string' ? persist.cgs[c] : ''; }
+function leadTabs(cur, counts) {
+  const keys = ['all', ...LEAD_ORDER.filter(l => counts[l]), ...(counts.common ? ['common'] : []), ...(counts.end ? ['end'] : [])];
+  return '<div class="gtabs lt">' + keys.map(k => `<button data-l="${k}" class="${k === cur ? 'sel' : ''}">${k === 'all' ? '全部' : esc(leadLabel(k))}</button>`).join('') + '</div>';
+}
+function cgUnlocked(x) { return !!persist.cgs[x]; }
 function scrCG(c) {
-  const ids = MAN.cg_ids; const seen = ids.filter(x => persist.cgs[x]).length;
-  c.innerHTML = `<div class="endl"><div class="cnt">已解鎖　${seen} / ${ids.length}</div></div><div class="cgg">` + ids.map(x => {
-    if (!persist.cgs[x]) return '<div class="cgi lock">？</div>';
-    const url = MAN.cg[x]; const note = cgNote(x).replace(/^CG[_a-z0-9]*[：:]\s*/i, '').replace(/【.*$/, '').slice(0, 30);
+  const ids = MAN.cg_ids; const CL = MAN.cg_lead || {}; const seen = ids.filter(cgUnlocked).length;
+  const counts = {}; for (const x of ids) { const l = CL[x] || 'common'; counts[l] = (counts[l] || 0) + 1; }
+  let tab = GM.ctab || 'all'; if (tab !== 'all' && !counts[tab]) tab = 'all'; GM.ctab = tab;
+  const list = ids.filter(x => tab === 'all' || (CL[x] || 'common') === tab);
+  const n = list.filter(cgUnlocked).length;
+  c.innerHTML = `<div class="endl"><div class="cnt">已解鎖　${seen} / ${ids.length}${tab !== 'all' ? `　（${esc(leadLabel(tab))} ${n} / ${list.length}）` : ''}</div></div>` + leadTabs(tab, counts) + '<div class="cgg">' + list.map(x => {
+    const url = MAN.cg[x]; const L = CL[x] || 'common';
+    if (!cgUnlocked(x)) return url && (L === 'end' || L === 'common' || leadKnown(L)) ? `<div class="cgi lock"><div class="cth sil" style="background-image:url('${url}')"></div><span>？</span></div>` : '<div class="cgi lock"><span>？</span></div>';
+    const note = hiddenSafe(cgNote(x).replace(/^CG[_a-z0-9]*[：:]\s*/i, '').replace(/【.*$/, '').slice(0, 30), everS());
     return url ? `<button class="cgi" data-cg="${x}" style="background-image:url('${url}')"></button>` : `<button class="cgi" data-cg="${x}">✦<br>${esc(note)}</button>`;
   }).join('') + '</div>';
+  c.querySelectorAll('.gtabs button').forEach(b => b.onclick = (e) => { e.stopPropagation(); GM.ctab = b.dataset.l; scrCG(c); c.scrollTop = 0; });
   c.querySelectorAll('.cgi[data-cg]').forEach(b => b.onclick = (e) => {
     e.stopPropagation(); const x = b.dataset.cg; const url = MAN.cg[x]; const vw = $('#viewer');
-    vw.innerHTML = url ? `<img src="${url}" alt="">` : cgPlaceholder(x, cgNote(x), null);
-    const img = vw.querySelector('img'); if (img) img.onerror = () => { vw.innerHTML = cgPlaceholder(x, cgNote(x), null); };
+    vw.innerHTML = url ? `<img src="${url}" alt="">` : cgPlaceholder(x, hiddenSafe(cgNote(x), everS()), null);
+    const img = vw.querySelector('img'); if (img) img.onerror = () => { vw.innerHTML = cgPlaceholder(x, hiddenSafe(cgNote(x), everS()), null); };
     vw.classList.remove('hidden'); vw.onclick = (ev) => { ev.stopPropagation(); vw.classList.add('hidden'); };
   });
+}
+// 舊存檔補登：已達成的個人／三人結局代表見過那位男主
+function backfillMet() {
+  // 只看結局（CG 可能來自他報上名字以前的早期登場，不能拿來補登）
+  for (const e of Object.keys(persist.endings)) for (const x of endingLeads(e)) persist.met[x] = persist.met[x] || 1;
+}
+function replayUnlocked(r) { return !!persist.scenes[r.sid] || r.cgs.some(cgUnlocked); }
+function scrReplay(c) {
+  const counts = {}; for (const r of REPLAY) counts[r.lead] = (counts[r.lead] || 0) + 1;
+  let tab = GM.rtab || 'all'; if (tab !== 'all' && !counts[tab]) tab = 'all'; GM.rtab = tab;
+  const list = REPLAY.filter(r => tab === 'all' || r.lead === tab);
+  const seen = REPLAY.filter(replayUnlocked).length;
+  c.innerHTML = `<div class="endl"><div class="cnt">可回想　${seen} / ${REPLAY.length}</div></div>` + leadTabs(tab, counts) + '<div class="rgrid">' + list.map(r => {
+    const url = MAN.cg[r.cgs[0]];
+    if (!replayUnlocked(r)) { const sil = url && (r.lead === 'common' || leadKnown(r.lead)); return `<div class="rcard lock"><div class="rth${sil ? ' sil' : ''}"${sil ? ` style="background-image:url('${url}')"` : ''}></div><div class="rt">？？？</div></div>`; }
+    return `<button class="rcard" data-r="${r.sid}"><div class="rth"${url ? ` style="background-image:url('${url}')"` : ''}>${url ? '' : '✦'}</div><div class="rt">${esc(hiddenSafe(r.title, everS()))}</div><div class="rl">${esc(leadLabel(r.lead))}</div></button>`;
+  }).join('') + '</div><div class="rel-note">回想不會改變存檔，也不會記錄選項。看完會回到這裡。</div>';
+  c.querySelectorAll('.gtabs button').forEach(b => b.onclick = (e) => { e.stopPropagation(); GM.rtab = b.dataset.l; scrReplay(c); c.scrollTop = 0; });
+  c.querySelectorAll('.rcard[data-r]').forEach(b => b.onclick = (e) => {
+    e.stopPropagation(); const r = REPLAY_IDX[b.dataset.r]; if (!r) return;
+    confirmBox(`要回想「${hiddenSafe(r.title, everS())}」嗎？`, () => startReplay({ sid: r.sid, lead: r.lead, back: 'replay' }));
+  });
+}
+// 回想：在沙盒裡只跑那一場（不排程、不跳轉、不存檔、不動跨周目紀錄）
+function startReplay(r) { closeGM(); startGame(null, { replay: r }); }
+function setupReplay(e, r) {
+  const v = e.S.v;
+  for (const id of LEADS) {
+    if (leadKnown(id)) { v[id + '_met'] = true; if (HIDDEN_UNLOCK[id]) v[HIDDEN_UNLOCK[id]] = true; }
+    v['aff_' + id] = Math.max(+v['aff_' + id] || 0, 40); v['bond_' + id] = Math.max(+v['bond_' + id] || 0, 40);
+  }
+  const L = r.lead; if (L && LEADS.includes(L)) { v['aff_' + L] = 85; v['bond_' + L] = 80; v['stage_' + L] = 4; v['cstage_' + L] = 4; v['heart_' + L] = true; v['confessed_' + L] = true; v.ending_lead = L; v.qualified = [L]; }
+  v.act = 4; v.day = 80; v.act2_guiding_unlocked = true; v.lost = [];
+  v.met_leads_40 = LEADS.filter(leadKnown); if (L && LEADS.includes(L)) v.met_leads_40 = [L, ...v.met_leads_40.filter(x => x !== L)];
+  v.colors_seen = (persist.colors || []).slice(); for (const c of v.colors_seen) v['color_' + c] = true;
+  e.replay = true;
+  e.schedule = async () => false;
+  e.jump = function () { this.S.stack.length = 0; };
+  const cmd0 = e.command.bind(e);
+  e.command = async (name, a, ins) => { if (/^(dayrest|freetime|guide|mission|advance|nextday|day|unlock)$/.test(name)) return; return cmd0(name, a, ins); };
+  e.S.stack = []; e.push(r.sid);
 }
 function scrPrefs(c) {
   const fsOK = !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
@@ -723,7 +864,7 @@ function scrHelp(c) {
 }
 
 // ---------------- main menu ----------------
-const MM = [['start', '開始遊戲'], ['load', '讀取'], ['endings', '結局圖鑑'], ['cg', 'CG鑑賞'], ['prefs', '設定'], ['about', '關於'], ['help', '說明']];
+const MM = [['start', '開始遊戲'], ['load', '讀取'], ['endings', '結局圖鑑'], ['cg', 'CG鑑賞'], ['replay', '回想'], ['prefs', '設定'], ['about', '關於'], ['help', '說明']];
 function buildMainNav() {
   const nav = $('#mm-nav'); if (!nav) return;
   nav.innerHTML = MM.filter(([k]) => k !== 'help' || !V.touch).map(([k, l]) => `<button data-m="${k}">${l}</button>`).join('');
@@ -744,7 +885,8 @@ async function boot() {
     if (!allEndings.includes(id)) allEndings.push(id);
     if (!endingTitles[id]) endingTitles[id] = sc.title || id;
   }
-  loadPersist(); migrateOld();
+  buildCatalog();
+  loadPersist(); migrateOld(); backfillMet();
   $('#game').classList.toggle('notrans', !settings.trans);
   $('#game').addEventListener('click', onTap);
   $('#status').addEventListener('click', (e) => { if (!T.inGame) return; e.stopPropagation(); openGM('today'); });
@@ -769,6 +911,7 @@ async function boot() {
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('service-worker.js').catch(() => {});
 }
 function gmReturn() { closeGM(); if (!T.inGame) $('#mainmenu').classList.remove('hidden'); }
-window.__dhwm = { get engine() { return engine; }, T, V, Store, startGame, toTitle, prologueSkipped, pickPrologue, openGM, quickAct, get RB() { return RB; }, get persist() { return persist; } };
+function endReplay() { const back = T.replay && T.replay.back; toTitle(); if (back) { $('#mainmenu').classList.add('hidden'); openGM(back); } }
+window.__dhwm = { get engine() { return engine; }, T, V, Store, startGame, toTitle, prologueSkipped, pickPrologue, openGM, quickAct, startReplay, endReplay, get REPLAY() { return REPLAY; }, get END_SCENE() { return END_SCENE; }, GM, get RB() { return RB; }, get persist() { return persist; } };
 boot().catch(e => { const b = $('#boot'); if (b) b.innerHTML = '燈火未眠<small>載入失敗，請重新整理（' + esc(e.message) + '）</small>'; });
 })();

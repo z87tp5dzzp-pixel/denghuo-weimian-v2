@@ -253,3 +253,29 @@ pre.credits { white-space: pre-wrap; font-family: inherit; font-size: 18px; line
 #game.small #pick .pk-list button { font-size: 36px; padding: 16px 40px; }
 #game.small #pick .pk-note { font-size: 24px; top: 490px; }
 #game.small .gm-title { font-size: 50px; }
+
+/* 第 7 期：結局圖鑑／CG 鑑賞／回想（分頁、剪影鎖、可點回想） */
+.gtabs { display: flex; flex-wrap: wrap; gap: 4px 22px; margin: 4px 0 14px; position: sticky; top: 0; z-index: 2; background: linear-gradient(#0d0c15 75%, rgba(13,12,21,0)); padding-bottom: 6px; }
+.gtabs button { font-size: 20px; color: var(--idle); padding: 4px 0; }
+.gtabs button small { font-size: 14px; margin-left: 6px; color: #6d675b; }
+.gtabs button.sel { color: var(--gold-hi); text-shadow: 0 0 8px rgba(233,190,110,.35); }
+.gtabs button.sel small { color: var(--gold); }
+.gsec { margin-bottom: 18px; }
+.gsec h4 { margin: 0 0 8px; font-size: 20px; font-weight: normal; color: var(--gold-hi); letter-spacing: .12em; border-bottom: 1px solid rgba(201,162,74,.2); padding-bottom: 4px; }
+.gsec h4 small { font-size: 14px; color: var(--idle); margin-left: 10px; letter-spacing: 0; }
+.egrid, .rgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.ecard, .rcard { display: flex; flex-direction: column; align-items: stretch; text-align: left; border: 1px solid rgba(201,162,74,.25); background: rgba(10,10,20,.55); padding: 6px; min-width: 0; }
+.ecard:hover, .rcard:hover, .ecard:active, .rcard:active { border-color: rgba(201,162,74,.8); background: rgba(40,32,14,.55); }
+.eth, .rth { aspect-ratio: 16/9; background: #0d0d16 center/cover no-repeat; display: flex; align-items: center; justify-content: center; color: var(--gold-hi); font-size: 22px; overflow: hidden; }
+.et, .rt { font-size: 16px; color: #e6dfcc; margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ed, .rl { font-size: 13px; color: var(--idle); }
+.ecard.lock, .rcard.lock { border-color: rgba(201,162,74,.1); }
+.ecard.lock .et, .rcard.lock .rt { color: #4f4a42; }
+/* 剪影：只留輪廓的暗影，不洩漏畫面內容 */
+.sil { filter: grayscale(1) brightness(.42) contrast(1.6) blur(7px); opacity: .55; }
+.cgi.lock { position: relative; }
+.cth { position: absolute; inset: 0; background: center/cover no-repeat; }
+.cgi.lock span { position: relative; z-index: 1; color: #6d675b; font-size: 22px; }
+#game.small .gtabs button { font-size: 26px; } #game.small .gtabs { gap: 6px 26px; }
+#game.small .egrid, #game.small .rgrid, #game.small .cgg { grid-template-columns: repeat(3, 1fr); gap: 14px; }
+#game.small .et, #game.small .rt { font-size: 22px; } #game.small .ed, #game.small .rl { font-size: 17px; }
