@@ -1,5 +1,5 @@
 /* 燈火未眠 service worker — network-first for code/data, cache-first for media */
-const CACHE = 'dhwm2-1795192770';
+const CACHE = 'dhwm2-1795197928';
 const CORE = ['./', 'index.html', 'style.css', 'js/expr.js', 'js/engine.js', 'js/ui.js', 'data/script.json', 'data/manifest.json', 'manifest.json', 'icons/icon-192.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(CORE)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k.startsWith('dhwm2-') && k !== CACHE && k !== 'dhwm2-media').map(k => caches.delete(k)))).then(() => self.clients.claim())); });
