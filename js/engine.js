@@ -1605,7 +1605,12 @@ class Engine {
         if (h) { const who = Object.keys(HEART).find(k => HEART[k] === h); const cur = S.stack.length ? S.stack[S.stack.length - 1].s : '';
           const ok = !who || this.callFn('lover', [who]) || (who === 'arno' && v.arno_brother_route) || /^END|_END|^E_/.test(cur) || (this.D.scenes[cur] && /endings/.test(this.D.scenes[cur].file || ''));
           if (!ok) { v['omen_' + who] = true; h = null; break; } }
-        if (h && !id.startsWith('hint_') && !v.colors_seen.includes(h)) { v.colors_seen.push(h); v['color_' + h] = true; }
+        if (h && !id.startsWith('hint_') && !v.colors_seen.includes(h)) {
+          const first = !(v.colors_seen && v.colors_seen.length);
+          v.colors_seen.push(h); v['color_' + h] = true;
+          // 11 W1：每輪第一抹顏色改播 bgm_colors_return（BGM_MAP／BGM_PLAN）
+          if (first) P.bgm = 'bgm_colors_return';
+        }
         this.ui.color && await this.ui.color(id, S);
         break;
       }
