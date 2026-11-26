@@ -208,11 +208,19 @@ const SPECIAL_FX = {
 };
 const MOOD_FX = { dark: 'brightness(.6) saturate(.9)' };
 function sceneFilter(fx) { return SPECIAL_FX[fx] || MOOD_FX[fx] || 'none'; }
+function setAccent(hexc) {
+  const st = document.documentElement.style;
+  if (!hexc) { st.removeProperty('--accent'); return; }
+  st.setProperty('--accent', hexc);
+}
+function leadCol(S, id) { const h = HEART[id]; return h && ((S && S.v.colors_seen) || []).includes(h) ? COLOR_HEX[h] || '' : ''; }
 function applyTint(S) {
   const n = colorsCount(S);
   if (!T.pop) $('#stage').style.setProperty('--sf', sceneFilter(S.pres.bgfx));
-  const sat = 18 + Math.min(11, n) * 5; const light = 50 + Math.min(11, n);
-  document.documentElement.style.setProperty('--accent', `hsl(42, ${sat}%, ${light}%)`);
+  // 8-1 F2：一開始只有灰白紅；強調色＝最近找回的那一種顏色
+  const cs = S.v.colors_seen || []; let last = '';
+  for (let i = cs.length - 1; i >= 0; i--) if (COLOR_HEX[cs[i]] && !/^hint_|^red_/.test(cs[i])) { last = COLOR_HEX[cs[i]]; break; }
+  setAccent(last);
   const key = (S.v.colors_seen || []).join(',');
   if (key !== R.colors) { R.colors = key; $('#colorbar').innerHTML = (S.v.colors_seen || []).map(c => `<i style="color:${COLOR_HEX[c] || '#c9a24a'};background:${COLOR_HEX[c] || '#c9a24a'}"></i>`).join(''); }
 }
@@ -222,9 +230,12 @@ function renderGauge(S) {
   const load = +v.load || 0; gl.classList.toggle('on', !!P.combat || (+v.day || 0) >= 1 || load > 0);
   gl.querySelector('i').style.setProperty('--v', Math.min(100, load / 1.2) + '%');
   const band = load >= 100 ? 'b4' : load >= 90 ? 'b3' : load >= 70 ? 'b2' : load >= 50 ? 'b1' : 'b0';
-  gl.className = 'gauge' + (gl.classList.contains('on') ? ' on' : '') + ' ' + band;
+  gl.className = 'gauge' + (gl.classList.contains('on') ? ' on' : '') + ' ' + band + (gl.classList.contains('cross') ? ' cross' : '');
   let num = gl.querySelector('b'); if (!num) { num = document.createElement('b'); gl.appendChild(num); }
   const prev = R.load; R.load = load; let mk = '';
+  // 8-1 C5：跨過 40／70／90 往上時，條會晃、手機會震（iPhone Safari 不支援震動就只晃）
+  const bi = (x) => x >= 90 ? 3 : x >= 70 ? 2 : x >= 40 ? 1 : 0;
+  if (prev != null && bi(load) > bi(prev)) { gl.classList.remove('cross'); void gl.offsetWidth; gl.classList.add('cross'); setTimeout(() => gl.classList.remove('cross'), 1300); try { navigator.vibrate && navigator.vibrate(bi(load) >= 3 ? [80, 60, 80, 60, 160] : bi(load) >= 2 ? [60, 50, 60] : 40); } catch (e) {} }
   if (prev != null && load !== prev) { mk = load > prev ? '▲' : '▼'; R.loadMk = mk; clearTimeout(R.loadT); R.loadT = setTimeout(() => { R.loadMk = ''; const n = $('#g-load b'); if (n) n.textContent = Math.round(+S.v.load || 0); }, 2600); }
   num.textContent = Math.round(load) + (R.loadMk || mk ? ' ' + (R.loadMk || mk) : '') + '・' + BAND_TXT[load >= 90 ? 3 : load >= 70 ? 2 : load >= 40 ? 1 : 0];
   num.className = (R.loadMk || mk) === '▲' ? 'up' : (R.loadMk || mk) === '▼' ? 'down' : '';
@@ -268,6 +279,9 @@ function finishTyping() { clearInterval(T.iv); T.typing = false; $('#text').text
 function showLine(line) {
   const tb = $('#window'); tb.classList.remove('hidden');
   tb.className = (line.kind || 'say') + (line.read && !T.skip ? ' read' : '');
+  const lc = engine && line.who ? leadCol(engine.S, line.who) : '';
+  if (line.kind === 'comm' && lc) { tb.classList.add('comm-col'); tb.style.setProperty('--comm', lc); } else tb.style.removeProperty('--comm');
+  $('#who').style.color = lc || '';
   let name = line.name || '';
   if (line.kind === 'comm') name = '通訊' + (name ? '・' + name : '');
   $('#who').textContent = name; $('#namebox').classList.toggle('empty', !name);
@@ -430,7 +444,7 @@ function makeMeta(S) {
   const P = S.pres; const sprites = [];
   if (!P.cg) for (const [id, sp] of Object.entries(P.sprites || {})) { const u = spriteUrl(id, sp.outfit, sp.expr); if (u) sprites.push([u, POS[sp.pos] || 50]); }
   const name = [hiddenSafe(P.date || '', S), hiddenSafe(P.title || '', S)].filter(Boolean).join('　') || '序章';
-  return { ts: Date.now(), name, thumb: { bg: P.bg || '', cg: P.cg ? 1 : 0, sp: sprites.slice(0, 3), fx: P.bgfx || '' } };
+  return { ts: Date.now(), name, thumb: { bg: P.bg || '', cg: P.cg ? 1 : 0, sp: sprites.slice(0, 3), fx: P.bgfx || '', col: (S.v.colors_seen || []).filter(c => COLOR_HEX[c] && !/^hint_|^red_/.test(c)).slice(-12) } };
 }
 function record(snap) { return { v: 2, snap: prune(JSON.parse(JSON.stringify(snap))), meta: makeMeta(snap) }; }
 function curSnap() { return engine && (engine.lastSnap || engine.snapshot()); }
@@ -459,6 +473,7 @@ function thumbHTML(r) {
   let h = `<div class="thumb" style="filter:${sceneFilter(t.fx)}"><div class="tb" style="background-image:${bg.replace(/"/g, '&quot;')}"></div>`;
   for (const [u, x] of (t.sp || [])) h += `<img src="${esc(u)}" style="left:${x}%" alt="">`;
   if (t.cg) h += '<div class="tcg">✦</div>';
+  if (t.col && t.col.length) h += '<div class="tcol">' + t.col.map(c => `<i style="background:${COLOR_HEX[c]};color:${COLOR_HEX[c]}"></i>`).join('') + '</div>';
   return h + '</div>';
 }
 
@@ -503,6 +518,7 @@ function startGame(snap, opt) {
   }).catch(err => { console.error(err); notify('發生錯誤：' + err.message, 5000); });
 }
 function toTitle() {
+  setAccent('');
   if (engine) engine.stopped = true; runId++; T.inGame = false; T.replay = null; T.resolve = null; T.card = null; RB = [];
   clearTimeout(T.timer); clearInterval(T.iv); setMode('auto', false); setMode('skip', false);
   Snd.play('amb', null); Snd.play('bgm', MAN.bgm.bgm_title_dreams || MAN.bgm.bgm_theme_musicbox || Object.values(MAN.bgm)[0] || null, .8); R.bgm = '__title'; R.amb = null;
@@ -599,16 +615,21 @@ function navAct(k) {
   if (k === 'title') { confirmBox('確定要回到標題畫面嗎？\n未保存的進度將會遺失。', () => { autosave(); savePersist(); toTitle(); }); return; }
   GM.screen = k; GM.render();
 }
+// 8-1 F3：日記裡，找回了顏色的那個人的名字，寫成他的顏色
+function diaryCol(html, S) {
+  for (const id of LEADS) { const c = leadCol(S, id); if (!c || !NAMES[id]) continue; if (HIDDEN.includes(id) && !leadVisible(id, S.v)) continue; html = html.split(NAMES[id]).join(`<span style="color:${c}">${NAMES[id]}</span>`); }
+  return html;
+}
 function scrDiary(c) {
   const D = ((engine && engine.S.v.diary) || []).slice().reverse();
-  c.innerHTML = '<div class="hist diary-list">' + (D.length ? D.map(e => `<div class="h"><div class="hn">第 ${esc(String(e.d))} 天</div><div class="ht">${esc(hiddenSafe(e.t, engine.S))}</div></div>`).join('') : '<div class="empty">日記還是空白的。每晚點燈以後，會寫上幾句。</div>') + '</div>';
+  c.innerHTML = '<div class="hist diary-list">' + (D.length ? D.map(e => `<div class="h"><div class="hn">第 ${esc(String(e.d))} 天</div><div class="ht">${diaryCol(esc(hiddenSafe(e.t, engine.S)), engine.S)}</div></div>`).join('') : '<div class="empty">日記還是空白的。每晚點燈以後，會寫上幾句。</div>') + '</div>';
   c.scrollTop = 0;
 }
 function scrHistory(c) {
   const L = (engine && engine.S.log) || [];
   c.innerHTML = '<div class="hist">' + (L.length ? L.map(l => l.k === 'choice'
     ? `<div class="h ch"><div class="hn">▸</div><div class="ht">${esc(hiddenSafe(l.t, engine.S))}</div></div>`
-    : `<div class="h"><div class="hn">${esc(l.n || '')}</div><div class="ht">${esc(hiddenSafe(l.t, engine.S))}</div></div>`).join('') : '<div class="empty">對話歷史紀錄為空。</div>') + '</div>';
+    : `<div class="h"><div class="hn"${leadCol(engine.S, l.w) ? ` style="color:${leadCol(engine.S, l.w)}"` : ''}>${esc(l.n || '')}</div><div class="ht">${esc(hiddenSafe(l.t, engine.S))}</div></div>`).join('') : '<div class="empty">對話歷史紀錄為空。</div>') + '</div>';
   c.scrollTop = c.scrollHeight;
 }
 function scrFiles(mode) {
@@ -647,7 +668,14 @@ function scrToday(c) {
   const act = +v.act || 1; let up = v.act2_guiding_unlocked ? 4 + Math.floor(act / 2) : 1; up -= Math.min(3, Math.floor((+v.steady || 0) / 10));
   const tip = ['什麼都可以做。', '還有餘裕。出任務時，感官開一半大概不會出事。', '每一次推感官都會更貴。今晚最好去疏導室。', '馬可斯不會簽任何任務。再不疏導，會出事。'][b];
   let h = `<div class="td"><div class="td-sec"><h4>我的負荷</h4><div class="td-row"><span class="k">現在</span><span class="v b${b}">${load}・${BAND_TXT[b]}</span></div>`;
+  h += `<div class="td-snow b${b}"><i style="--v:${Math.min(100, load / 1.2)}%"></i><span style="left:33.3%">40</span><span style="left:58.3%">70</span><span style="left:75%">90</span></div>`;
   h += `<div class="td-row"><span class="k">明天</span><span class="v">今晚不疏導的話，大約 ${Math.max(0, load + Math.max(0, up))}</span></div><div class="td-note">${tip}</div></div>`;
+  // 8-1 C5：主線倒數（只說還有幾天，不說是什麼）
+  const nm = engine.nextMainIn && engine.nextMainIn();
+  const rainy = !!v.rain_day || (VEngine.weatherOf && VEngine.weatherOf(+v.day || 0) === 'rain');
+  h += `<div class="td-sec"><h4>城裡</h4>` + (nm == null ? '<div class="td-note">風聲停了。接下來的事，誰也說不準。</div>'
+    : `<div class="td-row"><span class="k">下一件大事</span><span class="v td-count">${nm <= 1 ? '明天' : '大約 ' + nm + ' 天後'}</span></div><div class="td-note">${nm <= 2 ? '城牆上的人都繃著。在那之前，把負荷降下來。' : '城裡的風聲還很遠。可以去做自己的事。'}</div>`)
+    + (rainy ? '<div class="td-note">下雨。疏導會差一點——除非主導的人不怕雨。</div>' : '') + '</div>';
   const vis = LEADS.filter(id => leadVisible(id, v));
   const gs = ['rowan', 'cecil', 'elio', 'orion', 'noa', 'arno'].filter(g => vis.includes(g));
   if (gs.length) h += `<div class="td-sec"><h4>疏導室</h4>` + gs.map(g => { const f = +v['gfat_' + g] || 0; return `<div class="td-row"><span class="k">${esc(NAMES[g])}</span><span class="v">${f >= 70 ? '累壞了，今晚不能主導' : f >= 45 ? '有點累' : '撐得住'}</span></div>`; }).join('') + '</div>';

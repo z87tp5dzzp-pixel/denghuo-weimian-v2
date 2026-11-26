@@ -11,7 +11,7 @@ const NAMES = { kael: '凱爾', rowan: '洛恩', cecil: '塞西爾', elio: '艾�
 const HIDDEN = ['silas', 'noa', 'vex', 'arno'];
 const HEART = { kael: 'silver_gray', rowan: 'hearth_red', cecil: 'blue', elio: 'green', orion: 'purple', ash: 'gold', leo: 'orange',
   silas: 'white', noa: 'pink', vex: 'black', arno: 'brown' };
-const COLOR_TO_HEART = { silver_gray: 'silver_gray', hearth_red: 'hearth_red', red_fire: 'hearth_red', blue: 'blue', green: 'green',
+const COLOR_TO_HEART = { silver_gray: 'silver_gray', hearth_red: 'hearth_red', blue: 'blue', green: 'green',
   purple: 'purple', gold: 'gold', orange: 'orange', white: 'white', pink: 'pink', black: 'black', brown: 'brown' };
 const COLOR_NAME = { silver_gray: '銀灰', hearth_red: '紅', red_fire: '紅', red_blood: '紅', blue: '藍', green: '綠', purple: '紫', gold: '金',
   orange: '橘', white: '白', pink: '粉紅', black: '黑', brown: '棕' };
@@ -35,6 +35,9 @@ const GUIDES = ['rowan', 'cecil', 'elio', 'orion', 'noa', 'arno'];
 const SENTINELS = ['kael', 'ash', 'leo', 'silas', 'vex'];
 const CONF_SEEN = { kael: 'K21', ash: 'A23', leo: 'L21', silas: 'S24', vex: 'V23' }; // 路線告白場＝也算 confessed
 const MX_TYPES = ['patrol', 'recon', 'escort', 'outside_wall', 'dark_op', 'execution'];
+// 8-1 C1：兩位嚮導之間合不合（只看嚮導彼此，不看她對誰的好感；戀愛不降負荷）
+const PAIR_DYN = { cecil_rowan: 'compete', elio_rowan: 'coop', orion_rowan: 'sense', noa_rowan: 'jealous', arno_rowan: 'jealous', cecil_elio: 'compete', cecil_orion: 'rival', cecil_noa: 'compete', arno_cecil: 'rival', elio_orion: 'coop', elio_noa: 'coop', arno_elio: 'coop', noa_orion: 'sense', arno_orion: 'rival', arno_noa: 'compete' };
+const PAIR_HINT = { cecil_rowan: '火與冰：吵起來的時候最有效，也最說不準', elio_rowan: '火光下的春草：最穩，明天也會安靜一點', orion_rowan: '窗邊的火：有時候會看見彼此', noa_rowan: '酒杯裡的火：有人會故意挑釁', arno_rowan: '火與舊毛毯：門邊那個人不太看火', cecil_elio: '冰下的淺灘：規程和醫囑在拉扯', cecil_orion: '夜空與裂縫：互相不服，久了才會讓', cecil_noa: '舞會廳：互刺得很優雅，結果說不準', arno_cecil: '檔案室：冷冷的對峙，久了才合拍', elio_orion: '黃昏的花田：最溫柔，明天也會安靜一點', elio_noa: '打烊後的溫室：意外合拍，明天也會安靜一點', arno_elio: '藥櫃與毛毯：很穩，明天也會安靜一點', noa_orion: '霓虹裂隙：有時候會看見彼此', arno_orion: '設施走廊：兩個人之間有話沒說', arno_noa: '被攔截的信：較勁，結果說不準' };
 const STAGE_T = [0, 0, 8, 15, 22, 30, 40, 55, 60]; // aff needed for stage n (stage 7: ≥55 until confession scenes exist)
 const PURIFY_ID = /^(GUIDE_|GS_|GR_|GX_|GXF_|WX_|WATCH_|JOIN_|LOAD_|TEMP_ANCHOR|ANCHOR_|EMERG|SENT_PRESENCE|SHARED_SENSE)/;
 const LOAD_MAX = 120;
@@ -232,7 +235,7 @@ class Engine {
     if (nn.startsWith('seen_ending_')) return !!(this.P.endings && this.P.endings[nn.slice(12)]) || v[nn];
     return v[nn];
   }
-  setVar(n, val) { n = normVar(n); if (typeof val === 'number' && n.startsWith('pair_bond_') && val > 100) val = 100; this.S.v[n] = val; }
+  setVar(n, val) { n = normVar(n); if (typeof val === 'number' && n.startsWith('pair_bond_') && val > 100) val = 100; if (typeof val === 'number' && val < 0 && (n === 'deathwish' || n.startsWith('sload_') || n.startsWith('gfat_'))) val = 0; this.S.v[n] = val; } // 8-1 E1：死願／哨兵負荷／嚮導疲勞不會是負數
   capPB() { const v = this.S.v; for (const k in v) if (k.startsWith('pair_bond_') && typeof v[k] === 'number' && v[k] > 100) v[k] = 100; } // v2 批2：pair_bond 上限 100
   met(x) {
     const v = this.S.v;
@@ -321,6 +324,17 @@ class Engine {
       case 'sload_of': return X.num(v['sload_' + a[0]]);
       case 'gfat_of': return X.num(v['gfat_' + a[0]]);
       case 'able': return this.guidesAble().includes(String(a[0]));
+      // 8-1 B2：危機時來找她的人＝最親近的那位（見過、隱藏男主要已解鎖、關係階段≥3、好感最高）；except＝排除某人
+      case 'closest': { const ex = String(a[0] || ''); let best = '', ba = -1;
+        for (const x of LEADS) { if (x === ex || !this.met(x)) continue; const st = Math.max(X.num(v['gstage_' + x]), X.num(v['cstage_' + x])); if (st < 3) continue; const af = X.num(v['aff_' + x]); if (af > ba) { ba = af; best = x; } }
+        return best; }
+      // 8-1 B2：嚮導來拉她，一定帶第二位嚮導（好感最高的另一位已見過的嚮導；沒有就回空字串＝後勤嚮導）
+      case 'second_guide': { const g = String(a[0] || ''), ex2 = String(a[1] || ''); let best = '', ba = -1;
+        for (const x of GUIDES) { if (x === g || x === ex2 || !this.met(x)) continue; const af = X.num(v['aff_' + x]); if (af > ba) { ba = af; best = x; } }
+        return best; }
+      case 'is_guide': return GUIDES.includes(String(a[0] || ''));
+      case 'pairhint': { const x = String(a[0] || ''), y = String(a[1] || ''); if (!x || !y || x === y) return ''; const h = PAIR_HINT[pairKey(x, y)]; return h ? `（${h}・${this.guideEst(x, y)}）` : `（${this.guideEst(x, y)}）`; }
+      case 'guideest': return this.guideEst(String(a[0] || ''), String(a[1] || ''));
       case 'name': case 'lover_name': return NAMES[a[0]] !== undefined ? NAMES[a[0]] : String(a[0]);
       case 'max_by': { const L = a[0] || []; const k = a[1] || 'aff'; let best = '', bv = -Infinity; for (const x of L) { const s = X.num(v[k + '_' + x]); if (s > bv) { bv = s; best = x; } } return best; }
       case 'top_by_aff': { const L = (a[0] || []).slice(); L.sort((p, q) => X.num(v['aff_' + q]) - X.num(v['aff_' + p])); return L.slice(0, X.num(a[1]) || 1); }
@@ -424,6 +438,7 @@ class Engine {
     v['pair_bond_' + k] = X.num(v['pair_bond_' + k]) + 1;
     v['pair_sync_' + k] = X.num(v['pair_sync_' + k]) + 3;
     let red = this.guideRed();
+    { const dyn = this.pairDyn(g1, g2); red += this.pairBonus(g1, g2, true); v.last_pair_dyn = dyn; if (dyn === 'coop') v.coop_day = v.day; }
     // 新版：嚮導的疲勞。主導 +12、在場 +6；她要求走深，兩個人都再 +8，降幅 +10
     v['gfat_' + g1] = Math.min(100, X.num(v['gfat_' + g1]) + 12 + (v.gd_deep ? 8 : 0));
     v['gfat_' + g2] = Math.min(100, X.num(v['gfat_' + g2]) + 6 + (v.gd_deep ? 8 : 0));
@@ -445,10 +460,25 @@ class Engine {
     if (v.seen_K10a && v.sent_in === 'kael') v.anchor_count_kael_after_K10a = X.num(v.anchor_count_kael_after_K10a) + 1;
     if (v.kael_romance_lock && X.num(v.aff_kael) > 19) v.aff_kael = 19;
   }
-  guideRed() {
-    const v = this.S.v; const st1 = X.num(v['gstage_' + v.g1]), st2 = X.num(v['gstage_' + v.g2]);
+  pairDyn(a, b) { // 8-1 C1：組合的動態，會隨兩人之間的協調值（pair_sync）成長
+    const v = this.S.v; const k = pairKey(a, b); let d = PAIR_DYN[k] || 'coop'; const sync = X.num(v['pair_sync_' + k]);
+    if (k === 'cecil_elio' && sync >= 15) d = 'coop';           // 競爭→合作
+    if (k === 'arno_rowan' && v.arno_truth) d = 'coop';          // 真相後轉合作
+    if (d === 'rival' && sync >= 18) d = 'coop';                 // 宿敵久了也會讓路
+    return d;
+  }
+  pairBonus(a, b, roll) {
+    const d = this.pairDyn(a, b); const sync = X.num(this.S.v['pair_sync_' + pairKey(a, b)]);
+    if (d === 'coop') return 3;
+    if (d === 'compete') return roll ? (Math.floor(Math.random() * 13) - 4) : 2; // −4～+8：高風險高回報
+    if (d === 'sense') return sync >= 15 ? 2 : 0;
+    return 0; // jealous／rival：照常
+  }
+  guideEst(a, b) { const r = this.guideRed(a, b) + this.pairBonus(a, b, false); return r >= 24 ? '能降很多' : r >= 17 ? '能降不少' : '能降一點'; }
+  guideRed(ga, gb) {
+    const v = this.S.v; ga = ga || v.g1; gb = gb || v.g2; const st1 = X.num(v['gstage_' + ga]), st2 = X.num(v['gstage_' + gb]);
     let red = 12 + 2 * st1 + Math.floor(st2 / 2);
-    if (weatherOf(v.day) === 'rain') red -= 4;
+    if (weatherOf(v.day) === 'rain' && ga !== 'cecil') red -= 4; // 下雨天反而塞西爾主導（abilities.md §5.1）
     if (v.anchor_refused) red = Math.floor(red / 2);
     if (v.pill_dependence) red -= 3;
     return red;
@@ -693,6 +723,7 @@ class Engine {
       up -= Math.min(3, Math.floor(X.num(v.steady) / 10));
       if (LEADS.some(x => X.num(v['gstage_' + x]) >= 6 || X.num(v['cstage_' + x]) >= 6)) up -= 1;
       if (v.pill_day === d) up -= 3;
+      if (v.coop_day !== undefined && X.num(v.coop_day) === d - 1) up -= 1; // 8-1 C1：合作組，隔天漲得慢一點（只限一天）
       if (up > 0) this.setLoad(X.num(v.load) + up, true);
       // 第一幕：休息日後勤嚮導例行梳理（不留羈絆，只把負荷壓回 40 左右）
       if (!v.act2_guiding_unlocked && isDayOff(d) && X.num(v.load) > 40) this.setLoad(Math.max(40, X.num(v.load) - 15), true);
@@ -700,7 +731,7 @@ class Engine {
     v.steady = Math.max(0, X.num(v.steady) - 1);
     // 新版：男人的負荷。哨兵每天自己退一點（只有兩位嚮導的疏導才會大幅降）；嚮導的疲勞睡一晚退 10。
     for (const x of SENTINELS) { const s0 = X.num(v['sload_' + x]); if (s0 > 0) v['sload_' + x] = Math.max(0, s0 - 3); if (X.num(v['sload_' + x]) < 50) v['sl_noticed_' + x] = false; }
-    for (const g of GUIDES) { const f0 = X.num(v['gfat_' + g]); if (f0 > 0) v['gfat_' + g] = Math.max(0, f0 - 10); if (X.num(v['gfat_' + g]) < 50) v['gf_noticed_' + g] = false; }
+    for (const g of GUIDES) { const f0 = X.num(v['gfat_' + g]); if (f0 > 0) v['gfat_' + g] = Math.max(0, f0 - 6); /* 8-1 E1：恢復變慢（原 −10） */ if (X.num(v['gfat_' + g]) < 50) v['gf_noticed_' + g] = false; }
     if (X.num(v.deep_day) === d - 1 && d >= 2) this.setLoad(X.num(v.load) + 2, true); // 走深的隔天，殘響比較重
     // 冷落
     v.neglect_who = ''; v.neglect_tier = 0;
@@ -1117,6 +1148,16 @@ class Engine {
     const T = MB_TXT[c.t] || ['……']; return T[c.k % T.length];
   }
   // 第 2 期：主線走到哪一段（最後一場看過的主線）
+  // 8-1 C5：下一件主線大事還有幾天（只回天數，不洩漏是什麼）
+  nextMainIn() {
+    const v = this.S.v; const d = X.num(v.day); let best = null;
+    for (const id of Object.keys(this.mainIndex || {})) {
+      const sc = this.D.scenes[id]; if (!sc || !sc.date || typeof sc.date.day !== 'number') continue;
+      if (v['seen_' + id.replace(/-/g, '_')] || sc.date.day <= d) continue;
+      if (best === null || sc.date.day < best) best = sc.date.day;
+    }
+    return best === null ? null : best - d;
+  }
   plotNow() {
     const v = this.S.v; let k = '', id = '';
     for (const [m, ph] of PLOT_PH) if (v['seen_' + m.replace(/-/g, '_')]) { k = ph; id = m; }
@@ -1393,7 +1434,7 @@ class Engine {
           f.pc++;
           const line = { who, expr: ins[2], text, kind: ins[4], key, read: this.P.read.has(key), pov: S.pres.pov, name: this.speakerName(who) };
           if (who && ins[2] && ins[2] !== 'default') this.ui.expr && this.ui.expr(who, ins[2]);
-          S.log.push({ n: line.name, t: text, k: line.kind }); if (S.log.length > 150) S.log.splice(0, S.log.length - 150);
+          S.log.push({ n: line.name, t: text, k: line.kind, w: who || '' }); if (S.log.length > 150) S.log.splice(0, S.log.length - 150);
           await this.ui.say(line);
           this.P.read.add(key);
           break;
@@ -1623,7 +1664,7 @@ class Engine {
         const who = this.interpId(m[1]);
         this.lastSnap = this.snapshot();
         const text = this.interpText(m[2]);
-        S.log.push({ n: '通訊・' + this.speakerName(who), t: text, k: 'comm' });
+        S.log.push({ n: '通訊・' + this.speakerName(who), t: text, k: 'comm', w: who || '' });
         await this.ui.say({ who, expr: '', text, kind: 'comm', key: null, read: false, pov: P.pov, name: this.speakerName(who) });
         break;
       }
