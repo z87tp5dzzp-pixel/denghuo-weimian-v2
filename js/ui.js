@@ -807,6 +807,15 @@ function endingGroup(id) {
 }
 function endingLeads(id) { return id.split('_').filter(x => LEADS.includes(x)); }
 const END_GROUPS = [['lead', '個人結局'], ['three', '三人結局'], ['multi', '多人結局'], ['fate', '命運'], ['other', '其他結局']];
+// 9 F7：結局圖鑑標出這個結局替封面帶來什麼
+function coverTag(id) {
+  const m = /^(\w+)_(solo|death)$/.exec(id); const O = CV.objs || {};
+  if (m && COVER_LEADS.includes(m[1])) { const hx = COLOR_HEX[HEART[m[1]]] || '#ccc'; return `<span class="ctag"><i style="background:${hx};opacity:${m[2] === 'death' ? .4 : 1}"></i>封面${m[2] === 'death' ? '：淡色＋一盞沒點的燈' : '：他的顏色'}</span>`; }
+  if (id === 'hidden') return '<span class="ctag"><i style="background:' + (COLOR_HEX[HEART.arno] || '#a07050') + '"></i>封面：他的顏色</span>';
+  if (O[id]) return `<span class="ctag"><img src="img/cover/${esc(O[id].f)}" alt="">封面：象徵物</span>`;
+  if (/rainbow/.test(id)) return '<span class="ctag">封面：天空</span>';
+  return '';
+}
 function endCard(id) {
   const ok = !!persist.endings[id]; const lk = endingLeads(id);
   const unknown = lk.some(x => !leadKnown(x));
@@ -817,7 +826,7 @@ function endCard(id) {
   }
   const cg = END_CG[id] && MAN.cg[END_CG[id]];
   const t = hiddenSafe(endingTitles[id] || id, everS()); const d = new Date(persist.endings[id]);
-  return `<button class="ecard" data-end="${esc(id)}"><div class="eth"${cg ? ` style="background-image:url('${cg}')"` : ''}>${cg ? '' : '✦'}</div><div class="et">${esc(t)}</div><div class="ed">${isNaN(d) ? '' : `${d.getMonth() + 1}/${d.getDate()}`}</div></button>`;
+  return `<button class="ecard" data-end="${esc(id)}"><div class="eth"${cg ? ` style="background-image:url('${cg}')"` : ''}>${cg ? '' : '✦'}</div><div class="et">${esc(t)}</div><div class="ed">${isNaN(d) ? '' : `${d.getMonth() + 1}/${d.getDate()}`}${coverTag(id)}</div></button>`;
 }
 function scrEndings(c) {
   const seen = allEndings.filter(e => persist.endings[e]).length;
