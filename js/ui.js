@@ -421,9 +421,11 @@ function card(t1, t2, cls, ms) {
 // ---------------- persistence ----------------
 function loadPersist() {
   const p = jget('persist') || {};
-  persist = { endings: p.endings || {}, cgs: p.cgs || {}, unlocks: p.unlocks || {}, gallery: p.gallery || {}, read: new Set(p.read || []), chosen: p.chosen || {}, scenes: p.scenes || {}, met: p.met || {}, colors: p.colors || [] };
+  persist = { endings: p.endings || {}, cgs: p.cgs || {}, unlocks: p.unlocks || {}, gallery: p.gallery || {}, read: new Set(p.read || []), chosen: p.chosen || {}, scenes: p.scenes || {}, met: p.met || {}, colors: p.colors || [], cover: p.cover || {} };
+  // 9 F7：舊存檔補登封面（已達成的單人結局＝上色；兄妹線＝棕；其他結局＝象徵物）
+  for (const id of Object.keys(persist.endings)) { const m = /^([a-z]+)_solo$/.exec(id); if (m && HEART[m[1]]) persist.cover[m[1]] = 'full'; else if (id === 'hidden') persist.cover.arno = 'full'; else if (!/_death$/.test(id)) persist.cover['obj_' + id] = persist.cover['obj_' + id] || persist.endings[id]; }
 }
-function savePersist() { if (T.replay) return; syncEver(); jset('persist', { endings: persist.endings, cgs: persist.cgs, unlocks: persist.unlocks, gallery: persist.gallery, read: [...persist.read], chosen: persist.chosen, scenes: persist.scenes, met: persist.met, colors: persist.colors }); }
+function savePersist() { if (T.replay) return; syncEver(); jset('persist', { endings: persist.endings, cgs: persist.cgs, unlocks: persist.unlocks, gallery: persist.gallery, read: [...persist.read], chosen: persist.chosen, scenes: persist.scenes, met: persist.met, colors: persist.colors, cover: persist.cover }); }
 // 跨周目紀錄：見過的男主（隱藏男主在圖鑑裡維持？？？直到見過）、看過的顏色（回想時用）
 function syncEver() {
   if (!engine || !engine.S || T.replay) return; const v = engine.S.v;
@@ -519,6 +521,7 @@ function startGame(snap, opt) {
 }
 function toTitle() {
   setAccent('');
+  renderCover();
   if (engine) engine.stopped = true; runId++; T.inGame = false; T.replay = null; T.resolve = null; T.card = null; RB = [];
   clearTimeout(T.timer); clearInterval(T.iv); setMode('auto', false); setMode('skip', false);
   Snd.play('amb', null); Snd.play('bgm', MAN.bgm.bgm_title_dreams || MAN.bgm.bgm_theme_musicbox || Object.values(MAN.bgm)[0] || null, .8); R.bgm = '__title'; R.amb = null;
@@ -592,16 +595,16 @@ function quickAct(a) {
 }
 
 // ---------------- game menu (left navigation + content), Ren'Py game_menu ----------------
-const SCREENS = { today: '今日', diary: '日記', history: '歷史紀錄', save: '存檔', load: '讀取', relation: '關係', endings: '結局圖鑑', cg: 'CG鑑賞', replay: '回想', prefs: '設定', about: '關於', help: '說明' };
+const SCREENS = { today: '今日', diary: '日記', notes: '我的筆記', history: '歷史紀錄', save: '存檔', load: '讀取', relation: '關係', endings: '結局圖鑑', cg: 'CG鑑賞', replay: '回想', prefs: '設定', about: '關於', help: '說明' };
 const GM = { screen: null, page: null,
   render() {
     const s = this.screen; $('#gm-title').textContent = SCREENS[s] || '';
-    const nav = T.replay ? ['history', 'prefs', 'endreplay'] : T.inGame ? ['today', 'diary', 'history', 'save', 'load', 'relation', 'endings', 'cg', 'prefs', 'about', 'title'] : ['start', 'load', 'endings', 'cg', 'replay', 'prefs', 'about'];
+    const nav = T.replay ? ['history', 'prefs', 'endreplay'] : T.inGame ? ['today', 'diary', 'notes', 'history', 'save', 'load', 'relation', 'endings', 'cg', 'prefs', 'about', 'title'] : ['start', 'load', 'endings', 'cg', 'replay', 'prefs', 'about'];
     if (!V.touch) nav.splice(nav.indexOf('about') + 1, 0, 'help');
     $('#gm-nav').innerHTML = nav.map(k => `<button data-n="${k}" class="${k === s ? 'sel' : ''}">${k === 'title' ? '標題畫面' : k === 'start' ? '開始遊戲' : k === 'endreplay' ? '結束回想' : SCREENS[k]}</button>`).join('');
     $('#gm-nav').querySelectorAll('button').forEach(b => b.onclick = (e) => { e.stopPropagation(); navAct(b.dataset.n); });
     const c = $('#gm-content'); c.scrollTop = 0;
-    ({ today: scrToday, diary: scrDiary, history: scrHistory, save: () => scrFiles('save'), load: () => scrFiles('load'), relation: scrRelation, endings: scrEndings, cg: scrCG, replay: scrReplay, prefs: scrPrefs, about: scrAbout, help: scrHelp })[s](c);
+    ({ today: scrToday, diary: scrDiary, notes: scrNotes, history: scrHistory, save: () => scrFiles('save'), load: () => scrFiles('load'), relation: scrRelation, endings: scrEndings, cg: scrCG, replay: scrReplay, prefs: scrPrefs, about: scrAbout, help: scrHelp })[s](c);
   } };
 function openGM(screen) {
   if (T.replay && !['history', 'prefs'].includes(screen)) screen = 'history';
@@ -614,6 +617,12 @@ function navAct(k) {
   if (k === 'endreplay') { endReplay(); return; }
   if (k === 'title') { confirmBox('確定要回到標題畫面嗎？\n未保存的進度將會遺失。', () => { autosave(); savePersist(); toTitle(); }); return; }
   GM.screen = k; GM.render();
+}
+// 9 B1：我的筆記：他們各自告訴我的碎片。湊得越多，攤牌那天越看得清楚
+function scrNotes(c) {
+  const S = engine && engine.S; const N = ((S && S.v.notes) || []);
+  const total = 11;
+  c.innerHTML = '<div class="hist diary-list"><div class="empty" style="opacity:.8">碎片 ' + N.length + '／' + total + (N.length >= 6 ? '　——快要拼起來了。' : '') + '</div>' + (N.length ? N.map(e => `<div class="h"><div class="hn">第 ${esc(String(e.d))} 天・${esc(hiddenSafe(engine.callFn('hname', [e.w]), S))}</div><div class="ht">${diaryCol(esc(hiddenSafe(e.t, S)), S)}</div></div>`).join('') : '<div class="empty">還沒有寫下什麼。有些事，要很熟了，他們才會告訴我。</div>') + '</div>';
 }
 // 8-1 F3：日記裡，找回了顏色的那個人的名字，寫成他的顏色
 function diaryCol(html, S) {
@@ -721,6 +730,47 @@ function scrRelation(c) {
 // ---------------- 圖鑑：結局／CG／回想（第 7 期） ----------------
 // 跨周目：隱藏男主沒見過以前，名字一律？？？；沒解鎖的格子用剪影或？？？。
 const LEAD_ORDER = ['kael', 'rowan', 'cecil', 'elio', 'orion', 'ash', 'leo', 'silas', 'noa', 'vex', 'arno'];
+// ---------------- 9 F7：封面 ----------------
+// 灰階底圖（只有刺青和燈芯是紅的）＋單人結局點亮他那一塊（跨周目保留）＋死亡結局淡色和一盞沒點的小燈＋虹之終讓天空第一次有顏色＋其他結局的象徵物。
+// 隱藏男主那一塊：見過、也達成之前，只是普通的灰色風景。點亮的地方可以點，打開那個結局的回想。
+const COVER_LEADS = ['kael', 'rowan', 'cecil', 'elio', 'orion', 'ash', 'leo', 'silas', 'noa', 'vex', 'arno'];
+const CV = { img: {}, hit: [] };
+function cvLoad(u) { if (CV.img[u]) return CV.img[u]; return (CV.img[u] = new Promise(r => { const i = new Image(); i.onload = () => r(i); i.onerror = () => r(null); i.src = u; })); }
+async function renderCover() {
+  const cv = $('#mm-cover'); if (!cv || !persist) return; const ctx = cv.getContext('2d');
+  const [base, col, objs] = await Promise.all([cvLoad('img/cover/cover_gray.webp'), cvLoad('img/cover/cover_color.webp'), CV.objs || fetch('img/cover/objects.json').then(r => r.ok ? r.json() : {}).catch(() => ({}))]);
+  CV.objs = objs || {}; if (!base) { cv.style.display = 'none'; return; }
+  $('#mainmenu').classList.add('has-cover');
+  ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; ctx.drawImage(base, 0, 0, 1280, 720); CV.hit = [];
+  const C = persist.cover || {}; const off = document.createElement('canvas'); off.width = 1280; off.height = 720; const o = off.getContext('2d');
+  const layer = async (k, a) => { const m = await cvLoad('img/cover/m_' + k + '.png'); if (!m || !col) return; o.globalCompositeOperation = 'source-over'; o.clearRect(0, 0, 1280, 720); o.drawImage(m, 0, 0); o.globalCompositeOperation = 'source-in'; o.drawImage(col, 0, 0, 1280, 720); ctx.globalAlpha = a; ctx.drawImage(off, 0, 0); ctx.globalAlpha = 1; };
+  if (C.sky) await layer('sky', 1);
+  for (const x of COVER_LEADS) {
+    const st = C[x]; if (!st || (HIDDEN.includes(x) && !leadKnown(x))) continue;
+    await layer(x, st === 'pale' ? .38 : 1);
+    const end = st === 'full' ? (x === 'arno' && !persist.endings.arno_solo ? 'hidden' : x + '_solo') : x + '_death';
+    CV.hit.push({ k: x, end });
+    if (st === 'pale') { const L = (CV.objs.__unlit || {})[x] || (CV.objs.__unlit || {}).default; const li = L && await cvLoad('img/cover/' + L.f); if (li) ctx.drawImage(li, L.x, L.y, L.w, L.w * li.height / li.width); }
+  }
+  for (const [id, ob] of Object.entries(CV.objs)) {
+    if (id.startsWith('__') || !C['obj_' + id] || endingLeads(id).some(x => !leadKnown(x))) continue;
+    const im = await cvLoad('img/cover/' + ob.f); if (!im) continue; const sc = Math.min(ob.w / im.width, ob.w * 1.15 / im.height); const w = im.width * sc, h = im.height * sc; const x0 = ob.x + (ob.w - w) / 2, y0 = ob.y + (ob.w * 1.15 - h);
+    ctx.drawImage(im, x0, y0, w, h); CV.hit.push({ rect: [x0, y0, w, h], end: id });
+  }
+}
+async function coverClick(e) {
+  const cv = $('#mm-cover'); if (!cv || T.inGame) return false; const r = cv.getBoundingClientRect();
+  const x = (e.clientX - r.left) * 1280 / r.width, y = (e.clientY - r.top) * 720 / r.height;
+  for (const h of CV.hit.slice().reverse()) {
+    let ok = false;
+    if (h.rect) ok = x >= h.rect[0] && x <= h.rect[0] + h.rect[2] && y >= h.rect[1] && y <= h.rect[1] + h.rect[3];
+    else { const m = await cvLoad('img/cover/m_' + h.k + '.png'); if (m) { const t = document.createElement('canvas'); t.width = 1; t.height = 1; const c = t.getContext('2d'); c.drawImage(m, -Math.floor(x), -Math.floor(y)); ok = c.getImageData(0, 0, 1, 1).data[3] > 140; } }
+    if (!ok) continue; const sid = END_SCENE[h.end]; if (!sid || !persist.endings[h.end]) continue;
+    confirmBox(`要回想「${hiddenSafe(endingTitles[h.end] || h.end, everS())}」嗎？`, () => startReplay({ sid, lead: endingLeads(h.end)[0] || '', back: '', ending: true }));
+    return true;
+  }
+  return false;
+}
 function leadKnown(id) { return !HIDDEN.includes(id) || !!(persist.met && persist.met[id]); }
 function everS() { const v = {}; for (const h of HIDDEN) if (leadKnown(h)) v[h + '_met'] = true; return { v }; }
 function leadLabel(id) { return id === 'common' ? '共通' : id === 'end' ? '結局' : leadKnown(id) ? NAMES[id] : '？？？'; }
@@ -917,6 +967,7 @@ async function boot() {
   loadPersist(); migrateOld(); backfillMet();
   $('#game').classList.toggle('notrans', !settings.trans);
   $('#game').addEventListener('click', onTap);
+  $('#mm-cover').addEventListener('click', (e) => { e.stopPropagation(); coverClick(e); });
   $('#status').addEventListener('click', (e) => { if (!T.inGame) return; e.stopPropagation(); openGM('today'); });
   $('#game').addEventListener('contextmenu', (e) => { e.preventDefault(); if (T.inGame && !overlayOpen()) openGM('save'); else if (!$('#gmenu').classList.contains('hidden')) gmReturn(); });
   $('#game').addEventListener('wheel', (e) => { if (T.inGame && !overlayOpen() && e.deltaY < 0) rollback(); }, { passive: true });

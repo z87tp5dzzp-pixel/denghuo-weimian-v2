@@ -325,6 +325,8 @@ class Engine {
       case 'gfat_of': return X.num(v['gfat_' + a[0]]);
       case 'able': return this.guidesAble().includes(String(a[0]));
       // 8-1 B2：危機時來找她的人＝最親近的那位（見過、隱藏男主要已解鎖、關係階段≥3、好感最高）；except＝排除某人
+      // 9 F0b：戀人＝告白成立（confessed_X 或路線告白場）。亞諾兄妹線是哥哥指定的例外（arno_brother_route 也算可以找回棕）
+      case 'lover': { const x = String(a[0] || ''); return !!(v['confessed_' + x] || (CONF_SEEN[x] && v['seen_' + CONF_SEEN[x]])); }
       case 'closest': { const ex = String(a[0] || ''); let best = '', ba = -1;
         for (const x of LEADS) { if (x === ex || !this.met(x)) continue; const st = Math.max(X.num(v['gstage_' + x]), X.num(v['cstage_' + x])); if (st < 3) continue; const af = X.num(v['aff_' + x]); if (af > ba) { ba = af; best = x; } }
         return best; }
@@ -732,6 +734,14 @@ class Engine {
     // 新版：男人的負荷。哨兵每天自己退一點（只有兩位嚮導的疏導才會大幅降）；嚮導的疲勞睡一晚退 10。
     for (const x of SENTINELS) { const s0 = X.num(v['sload_' + x]); if (s0 > 0) v['sload_' + x] = Math.max(0, s0 - 3); if (X.num(v['sload_' + x]) < 50) v['sl_noticed_' + x] = false; }
     for (const g of GUIDES) { const f0 = X.num(v['gfat_' + g]); if (f0 > 0) v['gfat_' + g] = Math.max(0, f0 - 6); /* 8-1 E1：恢復變慢（原 −10） */ if (X.num(v['gfat_' + g]) < 50) v['gf_noticed_' + g] = false; }
+    // 9 F0b：成為戀人的隔天起，他的找回場一定會排進來（一天最多一場、不會過期）
+    if (!this.S.queue.some(q => q.t === 'scene' && /^COLOR_/.test(q.id))) for (const x of LEADS) {
+      const id = 'COLOR_' + x.toUpperCase(); if (!this.D.scenes[id] || v['seen_' + id] || v['color_' + HEART[x]] || !this.callFn('lover', [x])) continue;
+      if (!v['lover_day_' + x]) { v['lover_day_' + x] = d; continue; }
+      if (d <= X.num(v['lover_day_' + x])) continue;
+      const e = this.events.find(q => q.id === id); if (e && !this.whenOK(e, {})) continue;
+      this.S.queue.unshift({ t: 'scene', id }); break;
+    }
     if (X.num(v.deep_day) === d - 1 && d >= 2) this.setLoad(X.num(v.load) + 2, true); // 走深的隔天，殘響比較重
     // 冷落
     v.neglect_who = ''; v.neglect_tier = 0;
@@ -1575,7 +1585,11 @@ class Engine {
       case 'date': { P.date = this.interpText(a); const sc = this.D.scenes[ins.__sid]; this.ui.date && await this.ui.date(P.date); break; }
       case 'color': {
         const id = this.interpId(a.trim().split(/\s+/)[0]);
-        const h = COLOR_TO_HEART[id];
+        let h = COLOR_TO_HEART[id];
+        // 9 F0b：還不是戀人，就不記他的顏色（結局場、亞諾兄妹線例外）
+        if (h) { const who = Object.keys(HEART).find(k => HEART[k] === h); const cur = S.stack.length ? S.stack[S.stack.length - 1].s : '';
+          const ok = !who || this.callFn('lover', [who]) || (who === 'arno' && v.arno_brother_route) || /^END|_END|^E_/.test(cur) || (this.D.scenes[cur] && /endings/.test(this.D.scenes[cur].file || ''));
+          if (!ok) { v['omen_' + who] = true; h = null; break; } }
         if (h && !id.startsWith('hint_') && !v.colors_seen.includes(h)) { v.colors_seen.push(h); v['color_' + h] = true; }
         this.ui.color && await this.ui.color(id, S);
         break;
@@ -1600,6 +1614,12 @@ class Engine {
         const id = this.interpId(a.trim());
         S.endingId = id; v.ending_id = id;
         this.P.endings[id] = this.P.endings[id] || Date.now();
+        // 9 F7：封面。單人結局＝他那一塊上色；死亡結局（已是戀人、也找回了他的顏色）＝淡色＋一盞沒點的小燈；亞諾兄妹線（hidden）例外給棕；虹之終＝天空第一次有顏色；其餘結局＝象徵物
+        { const C = this.P.cover || (this.P.cover = {}); const m = /^([a-z]+)_(solo|death)$/.exec(id);
+          if (m && HEART[m[1]]) { const x = m[1]; if (m[2] === 'solo') C[x] = 'full'; else if (C[x] !== 'full' && this.callFn('lover', [x]) && (v.colors_seen || []).includes(HEART[x])) C[x] = 'pale'; }
+          else if (id === 'hidden') C.arno = 'full';
+          else C['obj_' + id] = C['obj_' + id] || Date.now();
+          if (v.rainbow) C.sky = true; }
         v['seen_ending_' + id] = true;
         this.ui.persist && this.ui.persist();
         break;
@@ -1675,6 +1695,16 @@ class Engine {
         this.lastSnap = this.snapshot();
         S.log.push({ n: '日記', t: text, k: 'diary' });
         await this.ui.say({ who: '', expr: '', text, kind: 'diary', key: null, read: false, pov: P.pov, name: '日記' });
+        break;
+      }
+      case 'note': { // 9 B1：我的筆記（謎團碎片）：@note <who> <text>
+        const sp = a.trim().indexOf(' '); const nw = a.trim().slice(0, sp); const text = this.interpText(a.trim().slice(sp + 1));
+        if ((v.notes || []).some(e => e.w === nw)) break;
+        v.notes = (v.notes || []).concat([{ d: v.day, w: nw, t: text }]);
+        v.mys_n = X.num(v.mys_n) + 1;
+        this.lastSnap = this.snapshot();
+        S.log.push({ n: '我的筆記', t: text, k: 'diary' });
+        await this.ui.say({ who: '', expr: '', text: '（寫進我的筆記）' + text, kind: 'diary', key: null, read: false, pov: P.pov, name: '我的筆記' });
         break;
       }
       case 'clickable': break;
