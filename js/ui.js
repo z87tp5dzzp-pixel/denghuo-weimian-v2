@@ -373,7 +373,7 @@ const ui = {
   },
   yieldTick() { return sleep(0); },
   onError(m) { console.warn('[engine]', m); },
-  async date(label) { $('#datechip').textContent = hiddenSafe(label, engine.S); await card(hiddenSafe(label, engine.S), '', 'date', 1500); },
+  async date(label) { $('#datechip').textContent = hiddenSafe(label, engine.S); actTint(label); await card(hiddenSafe(label, engine.S), '', 'date', 1500); $('#card .c1').style.cssText = ''; },
   async title(t, sub) { await card(hiddenSafe(t, engine.S), hiddenSafe(sub || '', engine.S), 'title', 2200); },
   async color(id, S) {
     applyTint(S); const fx = $('#fxlayer'); const c = COLOR_HEX[id] || COLOR_HEX[(id || '').replace(/^hint_/, '')] || '#e2b84a';
@@ -407,6 +407,17 @@ const ui = {
   },
 };
 function chosenKey(base, sid, o) { return /^__s/.test(sid) ? 'S:' + o.text : base + ':' + o.text; }
+// 10 F10：每一幕對應的人（他的故事在那一幕轉彎）
+const ACT_LEADS = { 一: ['kael', 'rowan'], 二: ['elio', 'cecil', 'ash'], 三: ['leo', 'orion', 'silas'], 四: ['noa', 'vex'], 五: ['arno'] };
+function actTint(label) {
+  const el = $('#card .c1'); if (!el) return; el.style.cssText = '';
+  const m = /第([一二三四五])幕/.exec(label || ''); if (!m || !persist) return;
+  const C = persist.cover || {};
+  const cols = ACT_LEADS[m[1]].filter(x => C[x] === 'full' && (!HIDDEN.includes(x) || leadKnown(x))).map(x => COLOR_HEX[HEART[x]]).filter(Boolean);
+  if (!cols.length) return;
+  if (cols.length === 1) el.style.color = cols[0];
+  else el.style.cssText = `background:linear-gradient(90deg,${cols.join(',')});-webkit-background-clip:text;background-clip:text;color:transparent`;
+}
 function card(t1, t2, cls, ms) {
   if (!t1 && !t2) return Promise.resolve();
   if (T.skip) return Promise.resolve();
@@ -671,10 +682,20 @@ function scrFiles(mode) {
 // 新版：今日狀態（負荷帶、明天預估、任務板期限、誰在等她、誰累了）
 const MB_NAME = { plot: '主線', patrol: '城牆巡邏', recon: '偵察', escort: '護送', outside_wall: '牆外・兩天一夜', dark_op: '暗線', execution: '處決', outpost: '前哨站・過夜', sealed: '封鎖區・過夜' };
 const BAND_TXT = ['安靜', '吵', '吃緊', '透支'];
+// 10 E5：不劇透的入口提示（名字照舊不出現）
+function hintLine(v) {
+  const d = +v.day || 0; const act = +v.act || 1; const H = [];
+  if (act >= 2 && !engine.met('noa')) H.push('今晚，酒館的燈還亮著。');
+  if (!engine.met('silas')) H.push('禮拜堂的門，好像沒有關緊。');
+  if (act >= 2 && !engine.met('vex')) H.push('北牆外，好像有人生了一堆火。');
+  if (act >= 2 && !engine.met('orion')) H.push('海邊的舊燈塔，半夜會亮一下。');
+  return H.length ? H[d % H.length] : '';
+}
 function scrToday(c) {
   const S = engine && engine.S; if (!S) { c.innerHTML = ''; return; }
   const v = S.v; const load = Math.round(+v.load || 0); const b = load >= 90 ? 3 : load >= 70 ? 2 : load >= 40 ? 1 : 0;
   const act = +v.act || 1; let up = v.act2_guiding_unlocked ? 4 + Math.floor(act / 2) : 1; up -= Math.min(3, Math.floor((+v.steady || 0) / 10));
+  if (v.act2_guiding_unlocked && (+v.tide_now || 0) && (+v.day || 0) < (+v.tide_end || 0)) up += 2; // 10 C8
   const tip = ['什麼都可以做。', '還有餘裕。出任務時，感官開一半大概不會出事。', '每一次推感官都會更貴。今晚最好去疏導室。', '馬可斯不會簽任何任務。再不疏導，會出事。'][b];
   let h = `<div class="td"><div class="td-sec"><h4>我的負荷</h4><div class="td-row"><span class="k">現在</span><span class="v b${b}">${load}・${BAND_TXT[b]}</span></div>`;
   h += `<div class="td-snow b${b}"><i style="--v:${Math.min(100, load / 1.2)}%"></i><span style="left:33.3%">40</span><span style="left:58.3%">70</span><span style="left:75%">90</span></div>`;
@@ -684,6 +705,8 @@ function scrToday(c) {
   const rainy = !!v.rain_day || (VEngine.weatherOf && VEngine.weatherOf(+v.day || 0) === 'rain');
   h += `<div class="td-sec"><h4>城裡</h4>` + (nm == null ? '<div class="td-note">風聲停了。接下來的事，誰也說不準。</div>'
     : `<div class="td-row"><span class="k">下一件大事</span><span class="v td-count">${nm <= 1 ? '明天' : '大約 ' + nm + ' 天後'}</span></div><div class="td-note">${nm <= 2 ? '城牆上的人都繃著。在那之前，把負荷降下來。' : '城裡的風聲還很遠。可以去做自己的事。'}</div>`)
+    + ((+v.tide_now || 0) ? `<div class="td-row"><span class="k">裂隙潮汐</span><span class="v">到第 ${+v.tide_end} 天，負荷每天多漲一點</span></div>` : '')
+    + (hintLine(v) ? `<div class="td-note">${hintLine(v)}</div>` : '')
     + (rainy ? '<div class="td-note">下雨。疏導會差一點——除非主導的人不怕雨。</div>' : '') + '</div>';
   const vis = LEADS.filter(id => leadVisible(id, v));
   const gs = ['rowan', 'cecil', 'elio', 'orion', 'noa', 'arno'].filter(g => vis.includes(g));
@@ -697,6 +720,9 @@ function scrToday(c) {
     else if ((+v['sload_' + id] || 0) >= 60) t.push('最近好像很累');
     if ((+v['gfat_' + id] || 0) >= 70) t.push('累壞了');
     if (v['seek_' + id]) t.push('在等我去找他');
+    if (id === 'elio' && (+v.act || 0) >= 3 && (+v.aff_elio || 0) >= 50 && !['rowan', 'cecil', 'noa', 'orion', 'arno'].some(g => (+v['pair_bond_elio_' + g] || +v['pair_bond_' + g + '_elio'] || 0) >= 25)) t.push(v.elio_rest_prescription ? '一個人扛得太多了——也許需要另一位嚮導和他一起' : '他從來不讓自己休息——也許需要另一位嚮導和他一起'); // 10 E2
+    else if (id !== 'elio' && v['death_risk_' + id]) t.push(['rowan', 'cecil', 'orion', 'noa', 'arno'].includes(id) ? '一個人扛得太多了——也許需要另一位嚮導和他一起' : '他好像打算一個人扛到最後');
+    if (load >= 70 && (+v['aff_' + id] || 0) >= 60) t.push('現在太吵了，靠近他會很難'); // 10 C7
     const gap = (v.day | 0) - (+v['last_seen_' + id] || 0); if (gap >= 8) t.push(`${gap} 天沒見了`);
     if ((+v['jealousy_' + id] || 0) >= 6) t.push('好像在鬧彆扭');
     if (t.length) notes.push(`<div class="td-row"><span class="k">${esc(NAMES[id])}</span><span class="v">${t.join('・')}</span></div>`);
@@ -816,13 +842,22 @@ function coverTag(id) {
   if (/rainbow/.test(id)) return '<span class="ctag">封面：天空</span>';
   return '';
 }
+function lockHint(id) {
+  if (/_solo$/.test(id)) return '和他一起，走到最後。';
+  if (/_death$/.test(id)) return '……有人，沒能一起回來。';
+  if (/^three_/.test(id)) return '讓兩個人一起分擔。';
+  if (/harem/.test(id)) return '每一個人的手。';
+  if (/^(multi|quad)/.test(id)) return '不只一雙手。';
+  if (/^fate_/.test(id)) return '沒有人的手。';
+  return '還有別的路。';
+}
 function endCard(id) {
   const ok = !!persist.endings[id]; const lk = endingLeads(id);
   const unknown = lk.some(x => !leadKnown(x));
   if (!ok) {
     const cg = END_CG[id] && MAN.cg[END_CG[id]];
     const sil = cg && !unknown ? ` style="background-image:url('${cg}')"` : '';
-    return `<div class="ecard lock"><div class="eth${sil ? ' sil' : ''}"${sil}></div><div class="et">？？？</div></div>`;
+    return `<div class="ecard lock"><div class="eth${sil ? ' sil' : ''}"${sil}></div><div class="et">？？？</div><div class="ed">${esc(lockHint(id))}</div></div>`;
   }
   const cg = END_CG[id] && MAN.cg[END_CG[id]];
   const t = hiddenSafe(endingTitles[id] || id, everS()); const d = new Date(persist.endings[id]);

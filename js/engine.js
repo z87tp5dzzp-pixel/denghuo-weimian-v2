@@ -169,6 +169,10 @@ function normVar(name) {
 }
 const clone = (o) => JSON.parse(JSON.stringify(o));
 
+// 10 C8：裂隙潮汐週 [起, 迄, 編號]：佈道週、雨季、裂隙在呼吸
+const TIDES = [[44, 50, 1], [91, 98, 2], [100, 105, 3]];
+// 10 C9：主線大事件（前一晚會問要怎麼準備）：失控的同僚、信徒、停電、封存區、公開、回收隊、最暗的夜、防衛戰
+const EVE_DAYS = [15, 50, 66, 81, 85, 95, 105, 107];
 class Engine {
   constructor(data, ui, persist) {
     this.D = data; this.ui = ui; this.P = persist; // persist: {endings:{}, cgs:{}, unlocks:{}, read:Set, gallery:{}}
@@ -189,6 +193,7 @@ class Engine {
     return {
       v: { aff_kael: 10, bond_kael: 45, toby_alive: true, lily_alive: true, hannah_alive: true, load: 0, day: 0, act: 0, time: 'morning',
         colors_seen: [], saved: [], lost: [], qualified: [], lights: [], ng_plus: ng, guide_tag: '', g1: '', g2: '', anchor: '', window: '',
+        ng_vision: ng ? ((L => L.length ? L[Math.floor(Math.random() * L.length)] : '')(LEADS.filter(x => (this.P.cover || {})[x] === 'full'))) : '', // 10 F9
         ending_lead: '', eve_lovers: [], eve_last: '', multi_left: [], three_left: '', other_side_lead: '', secret_arno_partner: '', gate_keeper: '' },
       stack: [], queue: [], synth: {}, synthN: 0, cursor: -1, fallback: false, ended: false, endingId: null,
       pres: { bg: null, bgfx: 'gray', sprites: {}, cg: null, bgm: null, amb: null, counter: null, pov: 'yasi', names: {}, combat: null, date: '', title: '' },
@@ -232,6 +237,7 @@ class Engine {
     }
     if (n === 'rain_day') return !!v.rain_day || weatherOf(v.day) === 'rain';
     const nn = normVar(n);
+    if (/^cover_[a-z]+$/.test(nn) && LEADS.includes(nn.slice(6))) return !!(this.P.cover && this.P.cover[nn.slice(6)]); // 10 F8：封面上已經有他（跨周目）
     if (nn.startsWith('seen_ending_')) return !!(this.P.endings && this.P.endings[nn.slice(12)]) || v[nn];
     return v[nn];
   }
@@ -725,12 +731,17 @@ class Engine {
       up -= Math.min(3, Math.floor(X.num(v.steady) / 10));
       if (LEADS.some(x => X.num(v['gstage_' + x]) >= 6 || X.num(v['cstage_' + x]) >= 6)) up -= 1;
       if (v.pill_day === d) up -= 3;
+      // 10 C8：裂隙潮汐週，每天多漲 2；10 C9：前一晚有哨兵守門＝今天早上不再往上漲（擋住上升，不會降）
+      const tide = TIDES.find(t => d >= t[0] && d <= t[1]); v.tide_now = tide ? tide[2] : 0; v.tide_end = tide ? tide[1] : 0;
+      if (tide && v.act2_guiding_unlocked) up += 2;
+      if (X.num(v.eve_watch_day) === d) up = 0;
       if (v.coop_day !== undefined && X.num(v.coop_day) === d - 1) up -= 1; // 8-1 C1：合作組，隔天漲得慢一點（只限一天）
       if (up > 0) this.setLoad(X.num(v.load) + up, true);
       // 第一幕：休息日後勤嚮導例行梳理（不留羈絆，只把負荷壓回 40 左右）
       if (!v.act2_guiding_unlocked && isDayOff(d) && X.num(v.load) > 40) this.setLoad(Math.max(40, X.num(v.load) - 15), true);
     }
     v.steady = Math.max(0, X.num(v.steady) - 1);
+    { const tw = TIDES.find(t => t[0] - 1 === d); if (tw && v.act2_guiding_unlocked && !v['tide_warned_' + tw[2]] && this.D.scenes.TIDE_WARN) { v['tide_warned_' + tw[2]] = true; v.tide_next = tw[2]; this.S.queue.push({ t: 'scene', id: 'TIDE_WARN' }); } }
     // 新版：男人的負荷。哨兵每天自己退一點（只有兩位嚮導的疏導才會大幅降）；嚮導的疲勞睡一晚退 10。
     for (const x of SENTINELS) { const s0 = X.num(v['sload_' + x]); if (s0 > 0) v['sload_' + x] = Math.max(0, s0 - 3); if (X.num(v['sload_' + x]) < 50) v['sl_noticed_' + x] = false; }
     for (const g of GUIDES) { const f0 = X.num(v['gfat_' + g]); if (f0 > 0) v['gfat_' + g] = Math.max(0, f0 - 6); /* 8-1 E1：恢復變慢（原 −10） */ if (X.num(v['gfat_' + g]) < 50) v['gf_noticed_' + g] = false; }
@@ -773,6 +784,7 @@ class Engine {
     code.push(['call', 'LOAD_CHECK']);
     if (guides && !off) code.push(['cmd', 'slot', 'eve', 0]);
     if (off && FEST[d] && this.D.scenes['FEST_' + FEST[d]] && !v['seen_FEST_' + FEST[d]] && !rest) code.push(['call', 'FEST_' + FEST[d]]);
+    if (X.num(v.act) >= 2 && v.act2_guiding_unlocked && !rest && EVE_DAYS.includes(d + 1) && X.num(v.eve_prep_day) !== d && this.D.scenes.EVE_PREP) code.push(['call', 'EVE_PREP']); // 10 C9
     code.push(['cmd', 'slot', isDayOff(d + 1) ? 'night_eve' : 'night', 0]);
     code.push(['call', 'LOAD_CHECK']);
     code.push(['cmd', 'msg_pick', '', 0]);
@@ -1651,6 +1663,7 @@ class Engine {
         const pos = (/pos=(\w+)/.exec(a) || [])[1] || (P.sprites[id] && P.sprites[id].pos) || 'center';
         P.sprites[id] = { outfit, expr: ex, pos, t: Date.now() };
         if (LEADS.includes(id) && S.stack.length && !(S.stack[0].s in this.mainIndex)) this.seenLead(id);
+        if (LEADS.includes(id) && v.ng_plus && !v['deja_' + id] && (this.P.cover || {})[id] && this.D.scenes.DEJA_LEAD) { v['deja_' + id] = true; v.deja_who = id; this.S.queue.push({ t: 'scene', id: 'DEJA_LEAD' }); } // 10 F8
         break;
       }
       case 'show_group': {
