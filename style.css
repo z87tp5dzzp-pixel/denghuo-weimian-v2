@@ -319,3 +319,10 @@ pre.credits { white-space: pre-wrap; font-family: inherit; font-size: 18px; line
 .ecard .ctag{display:block;font-size:10px;opacity:.85;margin-top:2px;white-space:nowrap}
 .ecard .ctag i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:3px;vertical-align:middle}
 .ecard .ctag img{width:14px;height:14px;object-fit:contain;vertical-align:middle;margin-right:3px}
+
+/* 10 E7：手機（觸控）——畫面整體會縮到約 0.54 倍，選項按鈕與快捷鍵在虛擬座標裡放大，實際點擊區 ≥ 44pt */
+@media (pointer: coarse) {
+  #clist > button { min-height: 84px; font-size: 27px; }
+  #clist.dense > button { min-height: 72px; }
+  #quick button { font-size: 19px; padding: 6px 14px 4px; }
+}

@@ -324,7 +324,7 @@ function prevChoice() {
 // ---------------- UI object given to the engine ----------------
 const ui = {
   say(line) {
-    if (T.skip && !line.read && line.key && !settings.skipUnread) setMode('skip', false);
+    if (T.skip && !T.toChoice && !line.read && line.key && !settings.skipUnread) setMode('skip', false);
     rbPush(false);
     T.lines++;
     if (T.lines % 80 === 0) autosave();
@@ -333,7 +333,7 @@ const ui = {
     return new Promise(res => { T.resolve = res; showLine(line); });
   },
   choice(opts, timed, prompt) {
-    const keepSkip = T.skip && settings.skipAfter;
+    const keepSkip = T.skip && settings.skipAfter && !T.toChoice; T.toChoice = false;
     setMode('skip', false); clearTimeout(T.timer);
     rbPush(true);
     autosave();
@@ -572,8 +572,8 @@ async function pickPrologue(p) {
 }
 
 // ---------------- quick menu ----------------
-const QM_TOUCH = [['rollback', '回退'], ['prev', '上個選項'], ['skip', '快進'], ['auto', '自動'], ['qsave', '快速存'], ['qload', '快速讀'], ['menu', '選單']];
-const QM_PC = [['rollback', '回退'], ['prev', '上個選項'], ['history', '歷史'], ['skip', '快進'], ['auto', '自動'], ['relation', '關係'], ['save', '存檔'], ['qsave', '快速存'], ['qload', '快速讀'], ['prefs', '設定']];
+const QM_TOUCH = [['rollback', '回退'], ['prev', '上個選項'], ['skip', '快進'], ['tochoice', '到選項'], ['auto', '自動'], ['qsave', '快速存'], ['qload', '快速讀'], ['menu', '選單']];
+const QM_PC = [['rollback', '回退'], ['prev', '上個選項'], ['history', '歷史'], ['skip', '快進'], ['tochoice', '到下個選項'], ['auto', '自動'], ['relation', '關係'], ['save', '存檔'], ['qsave', '快速存'], ['qload', '快速讀'], ['prefs', '設定']];
 const QM_REPLAY = [['history', '歷史'], ['skip', '快進'], ['auto', '自動'], ['endreplay', '結束回想']];
 function buildQuick() {
   const q = $('#quick'); const set = T.replay ? QM_REPLAY : V.touch ? QM_TOUCH : QM_PC;
@@ -586,7 +586,7 @@ function syncQuick() {
   const q = $('#quick'); if (!q) return;
   q.querySelectorAll('button').forEach(b => {
     const a = b.dataset.q;
-    b.classList.toggle('on', (a === 'auto' && T.auto) || (a === 'skip' && T.skip));
+    b.classList.toggle('on', (a === 'auto' && T.auto) || (a === 'skip' && T.skip && !T.toChoice) || (a === 'tochoice' && T.skip && T.toChoice));
     if (a === 'qload') b.disabled = !Store.get('quick-1');
     if (a === 'rollback') b.disabled = RB.length < 2;
   });
@@ -596,6 +596,7 @@ function quickAct(a) {
   switch (a) {
     case 'rollback': rollback(); break;
     case 'prev': prevChoice(); break;
+    case 'tochoice': T.toChoice = true; setMode('skip', true); if (T.typing) finishTyping(); if (!T.typing && T.resolve) scheduleAdvance(); break; // 10 E3：一路快轉到下一個選項（沒讀過的也跳）
     case 'skip': case 'auto': setMode(a, !T[a]); if (T[a] && T.typing) finishTyping(); if (T[a] && !T.typing && T.resolve) scheduleAdvance(); break;
     case 'qsave': quickSave(); break;
     case 'qload': quickLoad(); break;
@@ -994,11 +995,20 @@ function buildMainNav() {
 }
 
 // ---------------- boot ----------------
+// 10 E7：劇本檔很大，第一次打開時顯示載入了多少（之後由 sw.js 快取，幾乎是瞬間）
+async function loadScript(u) {
+  const r = await fetch(u); if (!r.body || !r.body.getReader) return r.json();
+  const rd = r.body.getReader(); const parts = []; let n = 0; const sm = document.querySelector('#boot small');
+  for (;;) { const { done, value } = await rd.read(); if (done) break; parts.push(value); n += value.length; if (sm) sm.textContent = `載入中……${(n / 1048576).toFixed(1)} MB`; }
+  if (sm) sm.textContent = '整理中……';
+  const all = new Uint8Array(n); let o = 0; for (const p of parts) { all.set(p, o); o += p.length; }
+  return JSON.parse(new TextDecoder().decode(all));
+}
 async function boot() {
   const v = document.querySelector('script[src*="ui.js"]').src.split('v=')[1] || '';
   $('#mm-ver').textContent = 'v' + v;
   fit(); addEventListener('resize', fit); addEventListener('orientationchange', () => setTimeout(fit, 250));
-  const [d, m] = await Promise.all([fetch('data/script.json?v=' + v).then(r => r.json()), fetch('data/manifest.json?v=' + v).then(r => r.json()), Store.init()]);
+  const [d, m] = await Promise.all([loadScript('data/script.json?v=' + v), fetch('data/manifest.json?v=' + v).then(r => r.json()), Store.init()]);
   DATA = d; MAN = m;
   for (const k of ['sprites', 'cg', 'bg', 'expr', 'bgm', 'amb']) MAN[k] = MAN[k] || {};
   MAN.cg_ids = MAN.cg_ids || [];

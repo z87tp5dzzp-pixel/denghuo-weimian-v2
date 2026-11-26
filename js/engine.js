@@ -173,6 +173,8 @@ const clone = (o) => JSON.parse(JSON.stringify(o));
 const TIDES = [[44, 50, 1], [91, 98, 2], [100, 105, 3]];
 // 10 C9：主線大事件（前一晚會問要怎麼準備）：失控的同僚、信徒、停電、封存區、公開、回收隊、最暗的夜、防衛戰
 const EVE_DAYS = [15, 50, 66, 81, 85, 95, 105, 107];
+// 10 B5：轉折場 ↔ 剛發生的主線（tools/v2/gen_p10c.py 的 B5）
+const B5_LEAD = {"kael": ["K21", ["p3b", "p3c", "p3d"]], "ash": ["A22", ["p4b"]], "leo": ["L15", ["p3e", "p3f"]], "orion": ["O24", ["p4c", "p4d"]], "rowan": ["R18", ["p2b", "p3b", "p3c"]], "silas": ["S22", ["p4b"]], "noa": ["N19", ["p3b", "p3c", "p3d"]], "vex": ["V19", ["p4c", "p4d"]]};
 class Engine {
   constructor(data, ui, persist) {
     this.D = data; this.ui = ui; this.P = persist; // persist: {endings:{}, cgs:{}, unlocks:{}, read:Set, gallery:{}}
@@ -395,6 +397,7 @@ class Engine {
     if (!this.code(sid)) { this.err('missing scene ' + sid); return false; }
     this.S.stack.push({ s: sid, pc: 0, loops: [] });
     const sc = this.D.scenes[sid];
+    { const v = this.S.v; const L5 = sc && sc.slotd && sc.lead; const P5 = L5 && B5_LEAD[L5]; if (P5 && !v['b5_' + L5] && P5[1].includes(this.getVar('plot')) && X.num(this.getVar('plot_age')) <= 7 && this.D.scenes.B5_OPEN) { v['b5_' + L5] = true; v.b5_id = P5[0]; v.seen_B5_OPEN = true; this.S.stack.push({ s: 'B5_OPEN', pc: 0, loops: [] }); } } // 10 B5：轉折場先接住剛發生的主線
     if (sc && sc.date) this.applyDate(sc.date);
     return true;
   }
