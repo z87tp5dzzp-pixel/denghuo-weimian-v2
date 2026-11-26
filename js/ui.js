@@ -373,8 +373,8 @@ const ui = {
   },
   yieldTick() { return sleep(0); },
   onError(m) { console.warn('[engine]', m); },
-  async date(label) { $('#datechip').textContent = hiddenSafe(label, engine.S); actTint(label); await card(hiddenSafe(label, engine.S), '', 'date', 1500); $('#card .c1').style.cssText = ''; },
-  async title(t, sub) { await card(hiddenSafe(t, engine.S), hiddenSafe(sub || '', engine.S), 'title', 2200); },
+  async date(label) { $('#datechip').textContent = hiddenSafe(label, engine.S); await titleDecoPrep(); await card(hiddenSafe(label, engine.S), '', 'date', 1500); $('#card .c1').style.cssText = ''; },
+  async title(t, sub) { await titleDecoPrep(); await card(hiddenSafe(t, engine.S), hiddenSafe(sub || '', engine.S), 'title', 2200); },
   async color(id, S) {
     applyTint(S); const fx = $('#fxlayer'); const c = COLOR_HEX[id] || COLOR_HEX[(id || '').replace(/^hint_/, '')] || '#e2b84a';
     if (T.skip || !settings.trans) return;
@@ -407,22 +407,38 @@ const ui = {
   },
 };
 function chosenKey(base, sid, o) { return /^__s/.test(sid) ? 'S:' + o.text : base + ':' + o.text; }
-// 10 F10：每一幕對應的人（他的故事在那一幕轉彎）
-const ACT_LEADS = { 一: ['kael', 'rowan'], 二: ['elio', 'cecil', 'ash'], 三: ['leo', 'orion', 'silas'], 四: ['noa', 'vex'], 五: ['arno'] };
-function actTint(label) {
-  const el = $('#card .c1'); if (!el) return; el.style.cssText = '';
-  const m = /第([一二三四五])幕/.exec(label || ''); if (!m || !persist) return;
-  const C = persist.cover || {};
-  const cols = ACT_LEADS[m[1]].filter(x => C[x] === 'full' && (!HIDDEN.includes(x) || leadKnown(x))).map(x => COLOR_HEX[HEART[x]]).filter(Boolean);
-  if (!cols.length) return;
-  if (cols.length === 1) el.style.color = cols[0];
-  else el.style.cssText = `background:linear-gradient(90deg,${cols.join(',')});-webkit-background-clip:text;background-clip:text;color:transparent`;
+// 10 F10（改）：章節標題跨周目累加——每個達成的單人結局加一種他的顏色（死亡結局＝淡色＋一盞沒點的燈），多人結局加它的象徵物；虹之終讓底線第一次有整片天空的顏色。
+function titleDeco(el, cls) {
+  const c1 = el.querySelector('.c1'); c1.style.cssText = ''; let dz = el.querySelector('.cdeco'); if (dz) dz.remove();
+  if (!persist || (cls !== 'date' && cls !== 'title')) return;
+  const C = persist.cover || {}; const cols = []; let unlit = 0;
+  for (const x of COVER_LEADS) { const st = C[x]; if (!st || (HIDDEN.includes(x) && !leadKnown(x))) continue; const hx = COLOR_HEX[HEART[x]]; if (!hx) continue; cols.push({ hx, pale: st === 'pale' }); if (st === 'pale') unlit++; }
+  const objs = Object.entries(CV.objs || {}).filter(([id]) => !id.startsWith('__') && C['obj_' + id] && endingLeads(id).every(x => leadKnown(x))).sort((p, q) => (+C['obj_' + p[0]] || 0) - (+C['obj_' + q[0]] || 0));
+  if (!cols.length && !objs.length && !C.sky) return;
+  if (cols.length) {
+    const t = c1.textContent; c1.textContent = ''; let k = 0;
+    for (const ch of [...t]) { const sp = document.createElement('span'); sp.textContent = ch; if (ch.trim() && !/[・·\s]/.test(ch)) { const c = cols[k++ % cols.length]; sp.style.color = c.hx; if (c.pale) sp.style.opacity = '.55'; sp.style.textShadow = '0 0 8px rgba(255,255,255,.28)'; } c1.appendChild(sp); }
+  }
+  dz = document.createElement('div'); dz.className = 'cdeco';
+  const stops = cols.length ? cols.map(c => c.pale ? c.hx + '88' : c.hx) : ['#9a9a9a'];
+  const line = document.createElement('i'); line.className = 'cline';
+  line.style.background = C.sky ? 'linear-gradient(90deg,#d9483b,#ef8a33,#e2b84a,#4fae6a,#3d7fd9,#9b62d6,#ef8fb5)' : `linear-gradient(90deg,transparent,${stops.length > 1 ? stops.join(',') : stops[0] + ',' + stops[0]},transparent)`;
+  dz.appendChild(line);
+  if (objs.length || unlit) {
+    const row = document.createElement('div'); row.className = 'cobjs';
+    for (const [, ob] of objs) { const im = document.createElement('img'); im.src = 'img/cover/' + ob.f; im.alt = ''; row.appendChild(im); }
+    const L = (CV.objs && CV.objs.__unlit) ? (CV.objs.__unlit.default || Object.values(CV.objs.__unlit)[0]) : null;
+    if (L && L.f) for (let i = 0; i < unlit; i++) { const im = document.createElement('img'); im.src = 'img/cover/' + L.f; im.alt = ''; im.className = 'unlit'; row.appendChild(im); }
+    dz.appendChild(row);
+  }
+  c1.after(dz);
 }
+async function titleDecoPrep() { if (!CV.objs) CV.objs = await fetch('img/cover/objects.json').then(r => r.ok ? r.json() : {}).catch(() => ({})); }
 function card(t1, t2, cls, ms) {
   if (!t1 && !t2) return Promise.resolve();
   if (T.skip) return Promise.resolve();
   return new Promise(res => {
-    const el = $('#card'); el.className = cls; el.querySelector('.c1').textContent = t1; el.querySelector('.c2').textContent = t2 || '';
+    const el = $('#card'); el.className = cls; el.querySelector('.c1').textContent = t1; el.querySelector('.c2').textContent = t2 || ''; titleDeco(el, cls);
     if (!settings.trans) el.style.animation = 'none'; else el.style.animation = '';
     let done = false; const fin = () => { if (done) return; done = true; T.card = null; el.classList.add('hidden'); res(); };
     T.card = fin; setTimeout(fin, ms);

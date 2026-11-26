@@ -326,3 +326,9 @@ pre.credits { white-space: pre-wrap; font-family: inherit; font-size: 18px; line
   #clist.dense > button { min-height: 72px; }
   #quick button { font-size: 19px; padding: 6px 14px 4px; }
 }
+/* 10 F10：章節標題的累加裝飾 */
+#card .cdeco { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 10px; }
+#card .cdeco .cline { display: block; width: 520px; height: 3px; border-radius: 2px; opacity: .85; }
+#card .cdeco .cobjs { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 10px; max-width: 980px; }
+#card .cdeco .cobjs img { height: 40px; width: auto; opacity: .9; filter: drop-shadow(0 0 4px rgba(0,0,0,.6)); }
+#card .cdeco .cobjs img.unlit { opacity: .6; }
