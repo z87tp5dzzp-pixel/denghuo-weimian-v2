@@ -1617,9 +1617,12 @@ class Engine {
       case 'freetime': this.freetime(this.interpId(a.trim())); break;
       case 'guide': { const p = a.trim().split(/\s+/); if (p[0] === 'free') this.guideFree(p[1] || 'free'); else this.push('GUIDE_DAILY'); break; }
       case '__guide_tag_events': {
-        // 新版：同一晚有好幾段可播時，播她最在意的那個人的（不再只看優先度）
+        // 同一晚有好幾段可播時：先播今晚實際在做疏導的人（g1／g2），再比守夜哨兵，再比好感與優先度。
+        // 避免只是守夜的哨兵因好感並列，把告白關鍵的真相之夜整場蓋掉。
+        const present = (lead) => lead && (lead === v.g1 || lead === v.g2) ? 2 : (lead === v.sent_in ? 1 : 0);
         const L = this.events.filter(e => e.s.whenx && /guide_tag ==/.test(e.s.whenx) && !this.getVar('seen_' + e.id) && !v['__started_' + e.id] && this.slotOK(e, {}) && this.whenOK(e, {}));
-        L.sort((p, q) => (X.num(v['aff_' + q.s.lead]) - X.num(v['aff_' + p.s.lead])) || (q.s.prio - p.s.prio));
+        // 好感優先（讓專攻某人身為守夜／未入對的真相之夜仍能播到），好感並列時才改播今晚主導／在場嚮導。
+        L.sort((p, q) => (X.num(v['aff_' + q.s.lead]) - X.num(v['aff_' + p.s.lead])) || (present(q.s.lead) - present(p.s.lead)) || (q.s.prio - p.s.prio));
         if (L[0]) this.push(L[0].id);
         break;
       }
@@ -1777,6 +1780,35 @@ class Engine {
       case 'dayrest': { const sid = this.synth([...this.dayCode(v.day, true), ['end']]); this.push(sid); break; }
       case 'load_mark': v.load_pending = 0; break;
       case 'emergency_load': { this.setLoad(X.num(this.ev(a.trim())), true); break; }
+      case 'intimacy_purify': {
+        // 一位嚮導做愛＝小降；兩位嚮導一起＝完整疏導；哨兵不降。
+        // 用法：@intimacy_purify <who> [who2]
+        const ids = a.trim().split(/\s+/).map(s => this.interpId(s)).filter(Boolean);
+        const gs = [...new Set(ids.filter(x => GUIDES.includes(x)))];
+        const ss = [...new Set(ids.filter(x => SENTINELS.includes(x)))];
+        const cur = X.num(v.load);
+        const floor = 5 * Math.max(1, X.num(v.act));
+        let red = 0, kind = 'none';
+        if (gs.length >= 2) {
+          kind = 'full';
+          red = this.guideRed(gs[0], gs[1]) + 4; // 接觸更深，比日常疏導略強一點
+          v['gfat_' + gs[0]] = Math.min(100, X.num(v['gfat_' + gs[0]]) + 10);
+          v['gfat_' + gs[1]] = Math.min(100, X.num(v['gfat_' + gs[1]]) + 8);
+          v.guided_day = v.day;
+          this.seenLead(gs[0]); this.seenLead(gs[1]);
+        } else if (gs.length === 1) {
+          kind = 'partial';
+          red = 8;
+          v['gfat_' + gs[0]] = Math.min(100, X.num(v['gfat_' + gs[0]]) + 6);
+          this.seenLead(gs[0]);
+        }
+        v.ix_purify = kind;
+        v.ix_purify_n = red;
+        if (red > 0) this.setLoad(Math.max(Math.min(cur, floor), cur - red), true);
+        else if (gs.length === 0 && ss.length >= 2) this.setLoad(Math.min(LOAD_MAX, cur + 10), true); // 結合熱，不是疏導
+        for (const x of ss) this.seenLead(x);
+        break;
+      }
       default:
         if (this.ui.fx) await this.ui.fx(c, this.interpText(a), S);
     }

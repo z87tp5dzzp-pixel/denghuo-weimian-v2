@@ -1,5 +1,5 @@
 {
-"version": 1795735349,
+"version": 1795788646,
 "sprites": {
 "arno": {
 "casual": "img/sprites/arno_casual.webp",
@@ -1447,6 +1447,7 @@
 "bg_black",
 "bg_briefing_room",
 "bg_briefing_room_night",
+"bg_camp_night",
 "bg_canteen_day",
 "bg_canteen_evening",
 "bg_canteen_kitchen",
@@ -1532,6 +1533,7 @@
 "bg_guide_room_corridor_evening",
 "bg_guide_room_corridor_night",
 "bg_guide_room_evening",
+"bg_guide_room_night",
 "bg_guide_tower_hall",
 "bg_guiding_room_corridor_night",
 "bg_guiding_room_dawn",
@@ -1703,6 +1705,7 @@
 "bg_rose_anchor_bar",
 "bg_rowan_kitchen_evening",
 "bg_rowan_kitchen_morning",
+"bg_rowan_kitchen_night",
 "bg_rowan_room_boxes",
 "bg_rowan_room_night",
 "bg_ruin_harbor_night",
@@ -1823,7 +1826,10 @@
 "cg_secret_arno_arno"
 ],
 "bg": [
+"bg_camp_night",
+"bg_guide_room_night",
 "bg_hq_yard_day",
+"bg_rowan_kitchen_night",
 "bg_sea_wall_day"
 ],
 "bgm": [
