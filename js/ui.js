@@ -514,6 +514,35 @@ function confirmBox(msg, yes, no) {
   $('#cf-no').onclick = (e) => { e.stopPropagation(); close(); no && no(); };
 }
 
+// 只清本遊戲（dhwm2_ 前綴與 IndexedDB「dhwm2」），絕不呼叫 localStorage.clear()，以免波及同網域的《魔王千金》。
+function wipeAllData() {
+  try { if (Store.db) { Store.db.close(); Store.db = null; } } catch (e) {}
+  Store.cache = {};
+  try {
+    const keys = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(LS)) keys.push(k);
+    }
+    for (const k of keys) localStorage.removeItem(k);
+  } catch (e) {}
+  let done = false;
+  const finish = () => { if (done) return; done = true; location.reload(); };
+  try {
+    if (!window.indexedDB) { finish(); return; }
+    const req = indexedDB.deleteDatabase('dhwm2');
+    req.onsuccess = finish;
+    req.onerror = finish;
+    req.onblocked = () => setTimeout(finish, 400);
+    setTimeout(finish, 2000);
+  } catch (e) { finish(); }
+}
+function askWipeAllData() {
+  confirmBox('確定要清除全部資料，從頭開始嗎？', () => {
+    confirmBox('這個動作無法復原。\n會刪除所有存檔、CG、結局和已讀紀錄。\n確定要清除嗎？', () => wipeAllData());
+  });
+}
+
 // ---------------- game lifecycle ----------------
 let runId = 0;
 function startGame(snap, opt) {
@@ -982,6 +1011,11 @@ function scrPrefs(c) {
     <div class="pv"><h3>環境音量</h3><input type="range" min="0" max="1" step="0.05" id="s-amb" value="${settings.amb}"></div>
     <div class="pv"></div>
     <div class="pv"><button class="rb ${settings.mute ? 'sel' : ''}" data-a="mute">全部靜音</button></div>
+    <div class="pv pv-wipe">
+      <h3>資料</h3>
+      <button type="button" class="wipe" id="wipe-all">清除全部資料</button>
+      <p class="wipe-note">只會清除本遊戲的存檔、CG、結局與已讀紀錄，無法復原。</p>
+    </div>
   </div>`;
   c.querySelectorAll('.rb').forEach(b => b.onclick = (e) => {
     e.stopPropagation(); const a = b.dataset.a;
@@ -995,6 +1029,8 @@ function scrPrefs(c) {
   $('#s-bgm').oninput = (e) => { settings.bgm = +e.target.value; saveSettings(); };
   $('#s-amb').oninput = (e) => { settings.amb = +e.target.value; saveSettings(); };
   $('#s-auto').oninput = (e) => { settings.auto = +(2.5 - +e.target.value).toFixed(2); saveSettings(); };
+  const wipe = $('#wipe-all');
+  if (wipe) wipe.onclick = (e) => { e.stopPropagation(); askWipeAllData(); };
 }
 function scrAbout(c) { c.innerHTML = `<pre class="credits">${esc(MAN.credits || '')}</pre>`; }
 function scrHelp(c) {
